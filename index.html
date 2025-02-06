@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Harita Fetih Oyunu</title>
+  
+  <!-- External Kütüphaneler -->
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <!-- FontAwesome (Simgeler için) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <!-- Animate.css -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+  
+  <!-- Inline CSS (Tüm stil ayarları) -->
+  <style>
+    /* ==================================================
+       Genel Sıfırlama ve Global Ayarlar
+       ================================================== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(135deg, #1e1e2f, #2a2a3d);
+      color: #eee;
+      overflow-x: hidden;
+    }
+    a {
+      text-decoration: none;
+      color: inherit;
+    }
+    
+    /* ==================================================
+       Bildirim (Popup) Alanı
+       ================================================== */
+    #notification-area {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 2000;
+      display: none;
+      padding: 10px 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      font-size: 14px;
+    }
+    
+    /* ==================================================
+       Setup Ekranı Stilleri
+       ================================================== */
+    #setup-container {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #2a2a3d;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+      width: 320px;
+      z-index: 1000;
+    }
+    #setup-container h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-weight: 600;
+      color: #f1c40f;
+    }
+    #setup-container label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      color: #bbb;
+    }
+    #setup-container input[type="number"],
+    #setup-container input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    
+    /* Oyuncu Detay Formu (Setup aşaması) */
+    #player-details {
+      display: none;
+      margin-bottom: 15px;
+    }
+    .player-detail {
+      margin-bottom: 10px;
+      padding: 8px;
+      background: #1e1e2f;
+      border-radius: 4px;
+    }
+    .player-detail label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+      color: #bbb;
+    }
+    .player-detail input[type="text"] {
+      width: 100%;
+      padding: 6px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .player-detail .color-options {
+      margin-top: 5px;
+    }
+    .global-color-option {
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      display: inline-block;
+      margin-right: 5px;
+      transition: transform 0.3s, border-color 0.3s;
+    }
+    .global-color-option:hover {
+      transform: scale(1.1);
+      border-color: #fff;
+    }
+    .global-color-option.selected {
+      border-color: #f1c40f;
+    }
+    #proceed-setup-btn,
+    #final-start-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(45deg, #f39c12, #e67e22);
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    #proceed-setup-btn:hover,
+    #final-start-btn:hover {
+      background: linear-gradient(45deg, #e67e22, #d35400);
+    }
+    
+    /* ==================================================
+       Oyun Ekranı Stilleri
+       ================================================== */
+    #game-container {
+      display: none; /* Oyun başlamadan görünmez */
+      height: 100vh;
+    }
+    #main-content {
+      display: flex;
+      height: 100%;
+    }
+    /* Harita Bölgesi */
+    #map-container {
+      flex: 7;
+      position: relative;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+    /* Sağ Panel */
+    #side-panel {
+      flex: 3;
+      background: #1e1e2f;
+      padding: 20px;
+      overflow-y: auto;
+      box-shadow: -4px 0 10px rgba(0, 0, 0, 0.4);
+    }
+    /* Üst Bilgi (Oyun Bilgileri) */
+    #game-info {
+      margin-bottom: 20px;
+      background: #2a2a3d;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+    #game-info h2 {
+      margin-bottom: 10px;
+      font-size: 20px;
+      color: #f1c40f;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+    #game-info p {
+      font-size: 14px;
+      margin: 6px 0;
+      color: #ddd;
+    }
+    /* Oyuncu Bilgileri */
+    #player-info-section {
+      margin-bottom: 20px;
+    }
+    #player-info-section h2 {
+      margin-bottom: 10px;
+      font-size: 20px;
+      color: #f1c40f;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+    .player-info {
+      background: #24243a;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      font-size: 14px;
+    }
+    .player-info p {
+      margin: 4px 0;
+      color: #ddd;
+    }
+    /* Ülke Detayları */
+    #country-info-section {
+      margin-bottom: 20px;
+    }
+    #country-info-section h2 {
+      margin-bottom: 10px;
+      font-size: 20px;
+      color: #f1c40f;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+    #country-info p {
+      font-size: 14px;
+      margin: 6px 0;
+      color: #ddd;
+    }
+    #country-info p span {
+      font-weight: 600;
+      color: #f39c12;
+    }
+    
+    /* ==================================================
+       İşlem ve Market Bölümü
+       ================================================== */
+    #market-section {
+      margin-bottom: 20px;
+    }
+    #market-section h2 {
+      margin-bottom: 10px;
+      font-size: 20px;
+      color: #f1c40f;
+      border-bottom: 1px solid #444;
+      padding-bottom: 5px;
+    }
+    .action-group {
+      margin-bottom: 15px;
+      background: #24243a;
+      padding: 12px;
+      border-radius: 6px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
+    .action-group h3 {
+      font-size: 16px;
+      color: #ccc;
+      margin-bottom: 8px;
+    }
+    .action-group input[type="number"],
+    .action-group select {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .action-group button {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(45deg, #f39c12, #e67e22);
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .action-group button:hover {
+      background: linear-gradient(45deg, #e67e22, #d35400);
+    }
+    .turn-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      color: #ddd;
+      margin-bottom: 10px;
+    }
+    .turn-info span {
+      font-weight: 600;
+      color: #f1c40f;
+    }
+    
+    /* ==================================================
+       Responsive Düzen
+       ================================================== */
+    @media (max-width: 768px) {
+      #main-content {
+        flex-direction: column;
+      }
+      #map-container,
+      #side-panel {
+        flex: unset;
+        height: 50vh;
+      }
+      #side-panel {
+        box-shadow: none;
+        border-top: 1px solid #444;
+      }
+    }
+    
+    /* ==================================================
+       Leaflet Tooltip & Ülke Popup
+       ================================================== */
+    .leaflet-tooltip {
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      padding: 4px 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    }
+    .country-popup-tooltip {
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      text-align: left;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    }
+    .country-popup-tooltip .emoji {
+      margin-right: 4px;
+    }
+    
+    /* ==================================================
+       Buton Ripple Efekti
+       ================================================== */
+    .button-click-effect {
+      position: relative;
+      overflow: hidden;
+    }
+    .button-click-effect .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.6);
+      transform: scale(0);
+      animation: ripple-animation 0.6s linear;
+    }
+    @keyframes ripple-animation {
+      to {
+        transform: scale(4);
+        opacity: 0;
+      }
+    }
+    
+    /* ==================================================
+       Saldırı Efekti (Attack Effect)
+       ================================================== */
+    .attack-effect {
+      animation: attack-effect 0.6s;
+    }
+    @keyframes attack-effect {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.2);
+        opacity: 0.5;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Setup Ekranı -->
+  <div id="setup-container">
+    <h2>Oyuncu Ayarları</h2>
+    <!-- İlk aşamada oyuncu sayısı giriliyor -->
+    <label for="player-count">Oyuncu Sayısı (2-5):</label>
+    <input type="number" id="player-count" min="2" max="5" placeholder="2 ile 5 arası" />
+    <button id="proceed-setup-btn" class="animate__animated animate__fadeInUp">Devam</button>
+    
+    <!-- İkinci aşama: Her oyuncunun ismini ve rengini seç -->
+    <div id="player-details"></div>
+    <button id="final-start-btn" style="display:none;" class="animate__animated animate__fadeInUp">Oyunu Başlat</button>
+  </div>
+  
+  <!-- Bildirim Alanı -->
+  <div id="notification-area"></div>
+  
+  <!-- Oyun Ekranı (Setup kapandıktan sonra gösterilecek) -->
+  <div id="game-container">
+    <div id="main-content">
+      <!-- Harita Bölgesi -->
+      <div id="map-container">
+        <div id="map"></div>
+      </div>
+      <!-- Sağ Panel -->
+      <div id="side-panel">
+        <!-- Üst Bilgi: Tur (Round) ve Toplam Petrol -->
+        <section id="game-info">
+          <h2>Oyun Bilgileri</h2>
+          <p>Tur: <span id="current-round">1</span></p>
+          <p>Toplam Petrol: <span id="total-petrol">0</span> varil</p>
+        </section>
+        <!-- Oyuncu Bilgileri -->
+        <section id="player-info-section">
+          <h2>Oyuncular</h2>
+          <div id="players-info">
+            <!-- Oyuncu kartları dinamik olarak oluşturulacak -->
+          </div>
+        </section>
+        <!-- Seçili Ülke Bilgileri -->
+        <section id="country-info-section">
+          <h2>Ülke Detayları</h2>
+          <div id="country-info">
+            <p>Ülke: <span id="selected-country-name">Yok</span></p>
+            <p>Sahip: <span id="selected-country-owner">Yok</span></p>
+            <p>Asker: <span id="selected-country-soldiers">0</span></p>
+            <p>Gelir: <span id="selected-country-income">0</span>$</p>
+            <p>Kışla: <span id="selected-country-barracks">0</span></p>
+            <p>Fabrika: <span id="selected-country-factories">0</span></p>
+            <p>Rafine: <span id="selected-country-refineries">0</span></p>
+            <p>Üretim Kapasitesi: <span id="selected-country-oilProduction">0</span> varil</p>
+          </div>
+        </section>
+        <!-- İşlem ve Market Bölümü -->
+        <section id="market-section">
+          <h2>İşlemler</h2>
+          <!-- Saldırı İşlemi -->
+          <div class="action-group">
+            <h3>Saldırı</h3>
+            <input type="number" id="attack-soldiers" placeholder="Asker sayısı" min="1" />
+            <button id="attack-btn"><i class="fas fa-crosshairs"></i> Saldırı Yap</button>
+          </div>
+          <!-- Asker Satın Alma -->
+          <div class="action-group">
+            <h3>Asker Satın Alma</h3>
+            <input type="number" id="soldiers-to-buy" placeholder="Adet" min="1" />
+            <button id="buy-soldiers-btn"><i class="fas fa-user-plus"></i> Satın Al (10$/adet)</button>
+          </div>
+          <!-- Asker Kışlası Kurma -->
+          <div class="action-group">
+            <h3>Asker Kışlası Kur</h3>
+            <button id="buy-barracks-btn"><i class="fas fa-fort-awesome"></i> Kışla Kur (130$ + 40 varil)</button>
+          </div>
+          <!-- Fabrika Kurma -->
+          <div class="action-group">
+            <h3>Fabrika Kur</h3>
+            <button id="build-factory-btn"><i class="fas fa-industry"></i> Fabrika Kur (250$ + 90 varil)</button>
+          </div>
+          <!-- Rafine Kurma -->
+          <div class="action-group">
+            <h3>Rafine Kur</h3>
+            <!-- Rafine: 250 varil + 800$, kurulunca üretim kapasitesi %20 artar -->
+            <button id="build-refinery-btn"><i class="fas fa-oil-can"></i> Rafine Kur (250 varil + 800$)</button>
+          </div>
+          <!-- Asker Çekme -->
+          <div class="action-group">
+            <h3>Asker Çek</h3>
+            <input type="number" id="pull-soldiers-count" placeholder="Asker sayısı" min="1" />
+            <button id="pull-soldiers-btn"><i class="fas fa-running"></i> Asker Çek</button>
+          </div>
+          <!-- Para Gönderme -->
+          <div class="action-group">
+            <h3>Para Gönder</h3>
+            <input type="number" id="money-to-send" placeholder="Miktar" min="1" />
+            <select id="recipient-player">
+              <!-- Dinamik oyuncu seçenekleri eklenecek -->
+            </select>
+            <button id="send-money-btn"><i class="fas fa-hand-holding-usd"></i> Para Gönder</button>
+          </div>
+          <!-- Petrol Gönderme -->
+          <div class="action-group">
+            <h3>Petrol Gönder</h3>
+            <input type="number" id="petrol-to-send" placeholder="Varil" min="1" />
+            <select id="recipient-player-petrol">
+              <!-- Dinamik oyuncu seçenekleri eklenecek -->
+            </select>
+            <button id="send-petrol-btn"><i class="fas fa-gas-pump"></i> Petrol Gönder</button>
+          </div>
+          <!-- Tur Bilgisi ve Tur Sonu -->
+          <div class="action-group">
+            <h3>Tur</h3>
+            <p>Sıra: <span id="current-player">Oyuncu Adı</span></p>
+            <button id="end-turn-btn"><i class="fas fa-forward"></i> Tur Sonu</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Ülke Tooltip Şablonu -->
+  <template id="country-popup-template">
+    <div class="country-popup">
+      <p><span class="emoji"><i class="fas fa-money-bill-wave"></i></span> Gelir: <span class="income"></span>$</p>
+      <p><span class="emoji"><i class="fas fa-users"></i></span> Asker: <span class="soldiers"></span></p>
+      <p><span class="emoji"><i class="fas fa-fort-awesome"></i></span> Kışla: <span class="barracks"></span></p>
+      <p><span class="emoji"><i class="fas fa-industry"></i></span> Fabrika: <span class="factories"></span></p>
+      <p><span class="emoji"><i class="fas fa-oil-can"></i></span> Rafine: <span class="refineries"></span></p>
+      <p><span class="emoji"><i class="fas fa-gas-pump"></i></span> Üretim Kapasitesi: <span class="oilProduction"></span> varil</p>
+      <p><span class="emoji"><i class="fas fa-crown"></i></span> Sahip: <span class="owner"></span></p>
+    </div>
+  </template>
+  
+  <!-- External JS Kütüphanesi: Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  
+  <!-- Inline JS (Oyun İşlevleri) -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      /*****************************************************************
+       * GLOBAL DEĞİŞKENLER & YARDIMCI FONKSİYONLAR
+       *****************************************************************/
+      let totalPlayers;
+      let currentPlayer = 1;
+      let currentRound = 1;
+      let selectedCountry = null;
+      let map;
+      const playerData = {};  // Örnek: { 1: { name, money, soldiers, countries, petrol } }
+      const countryData = {}; // Örnek: { "Ülke Adı": { income, soldiers, owner, layer, barracksCount, factories, refineries, oilProduction } }
+      const playerColors = { 1: "red", 2: "blue", 3: "green", 4: "yellow", 5: "purple" };
+      let selectedPlayerColor = null;
+      const localPlayerId = Math.random().toString(36).substr(2, 9);
+    
+      // Available renkler (Setup aşamasında kullanılacak)
+      const availableColors = ["red", "blue", "green", "yellow", "purple"];
+    
+      // Animate.css ile animasyon ekleme fonksiyonu
+      function animateWithAnimateCSS(element, animationName, callback) {
+        element.classList.add("animate__animated", animationName);
+        function handleAnimationEnd(event) {
+          event.stopPropagation();
+          element.classList.remove("animate__animated", animationName);
+          element.removeEventListener("animationend", handleAnimationEnd);
+          if (typeof callback === "function") callback();
+        }
+        element.addEventListener("animationend", handleAnimationEnd);
+      }
+    
+      // Popup bildirimlerini gösterir
+      function showNotification(message, duration = 3000) {
+        const notificationArea = document.getElementById("notification-area");
+        notificationArea.innerHTML = `<div class="popup">${message}</div>`;
+        notificationArea.style.display = "flex";
+        notificationArea.style.opacity = 0;
+        notificationArea.style.transform = "translateY(-20px)";
+        setTimeout(() => {
+          notificationArea.style.transition = "opacity 0.5s, transform 0.5s";
+          notificationArea.style.opacity = 1;
+          notificationArea.style.transform = "translateY(0)";
+        }, 10);
+        setTimeout(() => {
+          notificationArea.style.opacity = 0;
+          notificationArea.style.transform = "translateY(-20px)";
+          setTimeout(() => {
+            notificationArea.style.display = "none";
+          }, 500);
+        }, duration);
+      }
+    
+      // Harita katmanında kısa flash/attack efekti uygular
+      function flashLayer(layer, flashColor) {
+        const originalStyle = {
+          fillColor: layer.options.fillColor,
+          weight: layer.options.weight,
+          color: layer.options.color,
+        };
+        layer.setStyle({ fillColor: flashColor, weight: 3 });
+        if (layer.getElement) {
+          const elem = layer.getElement();
+          if (elem) {
+            elem.classList.add("attack-effect");
+            setTimeout(() => elem.classList.remove("attack-effect"), 600);
+          }
+        }
+        setTimeout(() => layer.setStyle(originalStyle), 600);
+      }
+    
+      // Butonlara ripple efekti ekler
+      function createRipple(e) {
+        const button = e.currentTarget;
+        const circle = document.createElement("span");
+        circle.classList.add("ripple");
+        const diameter = Math.max(button.clientWidth, button.clientHeight);
+        circle.style.width = circle.style.height = `${diameter}px`;
+        const rect = button.getBoundingClientRect();
+        circle.style.left = `${e.clientX - rect.left - diameter / 2}px`;
+        circle.style.top = `${e.clientY - rect.top - diameter / 2}px`;
+        button.appendChild(circle);
+        setTimeout(() => circle.remove(), 500);
+      }
+      document.querySelectorAll("button").forEach((btn) => {
+        btn.classList.add("button-click-effect");
+        btn.addEventListener("click", createRipple);
+      });
+    
+      /*****************************************************************
+       * SETUP AŞAMASI: OYUNCU SAYISI, İSİMLER VE RENK SEÇİMLERİNİN ALINMASI
+       *****************************************************************/
+      // İlk aşamada, oyuncu sayısı girilip "Devam" butonuna tıklanınca, dinamik oyuncu detay formu oluşturuluyor.
+      document.getElementById("proceed-setup-btn").addEventListener("click", () => {
+        const count = parseInt(document.getElementById("player-count").value);
+        if (isNaN(count) || count < 2 || count > 5) {
+          showNotification("Lütfen 2 ile 5 arasında bir sayı girin!");
+          return;
+        }
+        totalPlayers = count;
+        const detailsDiv = document.getElementById("player-details");
+        detailsDiv.innerHTML = "";
+        for (let i = 1; i <= totalPlayers; i++) {
+          const div = document.createElement("div");
+          div.className = "player-detail";
+          div.innerHTML = `
+            <label for="player-name-${i}">Oyuncu ${i} İsmi:</label>
+            <input type="text" id="player-name-${i}" placeholder="Oyuncu ${i} ismini girin" />
+            <label>Renk Seçiniz:</label>
+            <div class="color-options" id="player-color-${i}"></div>
+          `;
+          detailsDiv.appendChild(div);
+          const colorDiv = document.getElementById(`player-color-${i}`);
+          availableColors.forEach(color => {
+            const btn = document.createElement("button");
+            btn.className = "global-color-option";
+            btn.style.background = color;
+            btn.dataset.color = color;
+            btn.addEventListener("click", function() {
+              // Aynı oyuncu alanındaki diğer butonlardan seçili olanı kaldır.
+              const siblings = colorDiv.querySelectorAll(".global-color-option");
+              siblings.forEach(sib => sib.classList.remove("selected"));
+              btn.classList.add("selected");
+            });
+            colorDiv.appendChild(btn);
+          });
+        }
+        detailsDiv.style.display = "block";
+        document.getElementById("final-start-btn").style.display = "block";
+      });
+    
+      document.getElementById("final-start-btn").addEventListener("click", () => {
+        // Her oyuncu için; girilen isim ve seçilen rengi oku
+        for (let i = 1; i <= totalPlayers; i++) {
+          const name = document.getElementById(`player-name-${i}`).value.trim();
+          if (!name) {
+            showNotification(`Lütfen Oyuncu ${i} için isim girin!`);
+            return;
+          }
+          const colorBtn = document.querySelector(`#player-color-${i} .global-color-option.selected`);
+          if (!colorBtn) {
+            showNotification(`Lütfen Oyuncu ${i} için bir renk seçin!`);
+            return;
+          }
+          playerData[i] = { 
+            name: name, 
+            money: 1000, 
+            soldiers: 0, 
+            countries: [], 
+            petrol: 0 
+          };
+          playerColors[i] = colorBtn.dataset.color;
+        }
+        document.getElementById("setup-container").style.display = "none";
+        document.getElementById("game-container").style.display = "block";
+        initializePlayersUI();
+        updateCurrentPlayerUI();
+        initializeMap();
+      });
+    
+      /*****************************************************************
+       * HARİTA VE ÜLKE İŞLEMLERİ
+       *****************************************************************/
+      function initializePlayersUI() {
+        const playersInfoDiv = document.getElementById("players-info");
+        playersInfoDiv.innerHTML = "";
+        const recipientSelect = document.getElementById("recipient-player");
+        recipientSelect.innerHTML = "";
+        const recipientPetrolSelect = document.getElementById("recipient-player-petrol");
+        recipientPetrolSelect.innerHTML = "";
+        for (let i = 1; i <= totalPlayers; i++) {
+          const playerDiv = document.createElement("div");
+          playerDiv.className = "player-info";
+          playerDiv.id = `player-info-${i}`;
+          playerDiv.innerHTML = `
+            <p><strong>${playerData[i].name}</strong></p>
+            <p>Para: <span id="money-${i}">1000</span>$</p>
+            <p>Asker: <span id="soldiers-${i}">0</span></p>
+            <p>Ülkeler: <span id="countries-${i}">0</span></p>
+            <p>Petrol: <span id="petrol-${i}">0</span> varil</p>
+          `;
+          playersInfoDiv.appendChild(playerDiv);
+    
+          const option = document.createElement("option");
+          option.value = i;
+          option.textContent = playerData[i].name;
+          recipientSelect.appendChild(option);
+    
+          const option2 = document.createElement("option");
+          option2.value = i;
+          option2.textContent = playerData[i].name;
+          recipientPetrolSelect.appendChild(option2);
+        }
+      }
+    
+      function updateCurrentPlayerUI() {
+        const currentPlayerElem = document.getElementById("current-player");
+        currentPlayerElem.textContent = playerData[currentPlayer].name;
+        animateWithAnimateCSS(currentPlayerElem, "animate__pulse");
+      }
+    
+      function updateSelectedCountryInfo() {
+        if (selectedCountry && countryData[selectedCountry]) {
+          const c = countryData[selectedCountry];
+          document.getElementById("selected-country-name").textContent = selectedCountry;
+          document.getElementById("selected-country-owner").textContent = c.owner ? playerData[c.owner].name : "Yok";
+          document.getElementById("selected-country-soldiers").textContent = c.soldiers;
+          let effectiveIncome = c.income;
+          if (c.factories) {
+            effectiveIncome = Math.floor(c.income * (1 + 0.25 * c.factories));
+          }
+          document.getElementById("selected-country-income").textContent = effectiveIncome;
+          document.getElementById("selected-country-barracks").textContent = c.barracksCount || 0;
+          document.getElementById("selected-country-factories").textContent = c.factories || 0;
+          document.getElementById("selected-country-refineries").textContent = c.refineries || 0;
+          const effectiveProduction = c.oilProduction ? Math.floor(c.oilProduction * (1 + 0.20 * (c.refineries || 0))) : 0;
+          document.getElementById("selected-country-oilProduction").textContent = effectiveProduction;
+        } else {
+          document.getElementById("selected-country-name").textContent = "Yok";
+          document.getElementById("selected-country-owner").textContent = "Yok";
+          document.getElementById("selected-country-soldiers").textContent = 0;
+          document.getElementById("selected-country-income").textContent = 0;
+          document.getElementById("selected-country-barracks").textContent = 0;
+          document.getElementById("selected-country-factories").textContent = 0;
+          document.getElementById("selected-country-refineries").textContent = 0;
+          document.getElementById("selected-country-oilProduction").textContent = 0;
+        }
+      }
+    
+      function updateUI() {
+        for (let i = 1; i <= totalPlayers; i++) {
+          if (document.getElementById(`money-${i}`))
+            document.getElementById(`money-${i}`).textContent = playerData[i].money;
+          if (document.getElementById(`soldiers-${i}`))
+            document.getElementById(`soldiers-${i}`).textContent = playerData[i].soldiers;
+          if (document.getElementById(`countries-${i}`))
+            document.getElementById(`countries-${i}`).textContent = playerData[i].countries.length;
+          if (document.getElementById(`petrol-${i}`))
+            document.getElementById(`petrol-${i}`).textContent = playerData[i].petrol;
+        }
+        for (const countryName in countryData) {
+          const c = countryData[countryName];
+          if (c.layer) {
+            if (c.owner) {
+              c.layer.setStyle({ fillColor: playerColors[c.owner] || "#ccc", fillOpacity: 0.7 });
+            } else {
+              c.layer.setStyle({ fillColor: "#ccc", fillOpacity: 0.7 });
+            }
+            updateCountryTooltip(countryName);
+          }
+        }
+      }
+    
+      /*****************************************************************
+       * HARİTA VE ÜLKE İŞLEMLERİ
+       *****************************************************************/
+      function initializeMap() {
+        map = L.map("map").setView([20, 0], 2);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18 }).addTo(map);
+    
+        // GeoJSON verisinde, yalnızca 43 ülkeye rastgele oilProduction değeri atayalım.
+        fetch("https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json")
+          .then((response) => response.json())
+          .then((geoJsonData) => {
+            const features = geoJsonData.features;
+            let oilIndexes = [];
+            if (features.length > 43) {
+              while (oilIndexes.length < 43) {
+                const randIdx = Math.floor(Math.random() * features.length);
+                if (!oilIndexes.includes(randIdx)) {
+                  oilIndexes.push(randIdx);
+                }
+              }
+            }
+            features.forEach((feature, idx) => {
+              feature.properties._index = idx;
+            });
+    
+            L.geoJson(geoJsonData, {
+              style: () => ({
+                color: "#555",
+                weight: 1,
+                fillColor: "#ccc",
+                fillOpacity: 0.7,
+              }),
+              onEachFeature: (feature, layer) => {
+                const countryName = feature.properties.name;
+                if (!countryData[countryName]) {
+                  let oilProduction = 0;
+                  if (oilIndexes.includes(feature.properties._index)) {
+                    oilProduction = Math.floor(Math.random() * (1000 - 250 + 1)) + 250;
+                  }
+                  countryData[countryName] = {
+                    income: Math.floor(Math.random() * 500) + 100,
+                    soldiers: 0,
+                    owner: null,
+                    layer: layer,
+                    barracksCount: 0,
+                    factories: 0,
+                    refineries: 0,
+                    oilProduction: oilProduction
+                  };
+                }
+                layer.bindTooltip(getCountryPopupContent(countryName), {
+                  permanent: true,
+                  direction: "center",
+                  className: "country-popup-tooltip",
+                });
+                layer.on("click", () => selectCountry(countryName, layer));
+              },
+            }).addTo(map);
+          });
+      }
+    
+      function selectCountry(countryName, layer) {
+        selectedCountry = countryName;
+        showNotification(`Seçilen ülke: ${countryName}`, 1500);
+        layer.setStyle({ weight: 4, color: "#FF4500" });
+        setTimeout(() => {
+          const owner = countryData[countryName].owner;
+          if (owner) {
+            layer.setStyle({
+              fillColor: playerColors[owner] || "#ccc",
+              fillOpacity: 0.7,
+              weight: 1,
+              color: "#555",
+            });
+          } else {
+            layer.setStyle({ fillColor: "#ccc", fillOpacity: 0.7, weight: 1, color: "#555" });
+          }
+        }, 800);
+        updateSelectedCountryInfo();
+      }
+    
+      function getCountryPopupContent(countryName) {
+        const c = countryData[countryName];
+        const ownerText = c.owner ? playerData[c.owner].name : "Yok";
+        const effectiveIncome = c.factories ? Math.floor(c.income * (1 + 0.25 * c.factories)) : c.income;
+        const effectiveProduction = c.oilProduction ? Math.floor(c.oilProduction * (1 + 0.20 * (c.refineries || 0))) : 0;
+        return `
+          <div class="country-popup">
+            <p><span class="emoji"><i class="fas fa-money-bill-wave"></i></span> Gelir: ${effectiveIncome}$</p>
+            <p><span class="emoji"><i class="fas fa-users"></i></span> Asker: ${c.soldiers}</p>
+            <p><span class="emoji"><i class="fas fa-fort-awesome"></i></span> Kışla: ${c.barracksCount || 0}</p>
+            <p><span class="emoji"><i class="fas fa-industry"></i></span> Fabrika: ${c.factories || 0}</p>
+            <p><span class="emoji"><i class="fas fa-oil-can"></i></span> Rafine: ${c.refineries || 0}</p>
+            <p><span class="emoji"><i class="fas fa-gas-pump"></i></span> Üretim Kapasitesi: ${effectiveProduction} varil</p>
+            <p><span class="emoji"><i class="fas fa-crown"></i></span> Sahip: ${ownerText}</p>
+          </div>
+        `;
+      }
+    
+      function updateCountryTooltip(countryName) {
+        const c = countryData[countryName];
+        if (c.layer && c.layer.getTooltip && c.layer.getTooltip()) {
+          c.layer.setTooltipContent(getCountryPopupContent(countryName));
+        }
+      }
+    
+      /*****************************************************************
+       * OYUN İŞLEVLERİ & OLAY DİNLEYİCİLERİ
+       *****************************************************************/
+      function attack() {
+        if (!selectedCountry) {
+          showNotification("Bir ülke seçin!");
+          return;
+        }
+        const soldiersToSend = parseInt(document.getElementById("attack-soldiers").value);
+        if (isNaN(soldiersToSend) || soldiersToSend <= 0) {
+          showNotification("Geçerli bir asker sayısı girin!");
+          return;
+        }
+        const currentPlayerData = playerData[currentPlayer];
+        if (soldiersToSend > currentPlayerData.soldiers) {
+          showNotification("Yeterli askeriniz yok!");
+          return;
+        }
+        const target = countryData[selectedCountry];
+        if (target.owner === currentPlayer) {
+          target.soldiers += soldiersToSend;
+          currentPlayerData.soldiers -= soldiersToSend;
+          showNotification(`${selectedCountry} ülkesine ${soldiersToSend} asker ekleniyor.`);
+        } else {
+          currentPlayerData.soldiers -= soldiersToSend;
+          if (soldiersToSend > target.soldiers) {
+            const remaining = soldiersToSend - target.soldiers;
+            target.soldiers = remaining;
+            const previousOwner = target.owner;
+            target.owner = currentPlayer;
+            if (previousOwner !== null) {
+              playerData[previousOwner].countries = playerData[previousOwner].countries.filter(c => c !== selectedCountry);
+            }
+            playerData[currentPlayer].countries.push(selectedCountry);
+            target.layer.setStyle({ fillColor: playerColors[currentPlayer] || "#ccc", fillOpacity: 0.7 });
+            if (target.layer.getElement) {
+              const elem = target.layer.getElement();
+              if (elem) {
+                elem.classList.add("attack-effect");
+                setTimeout(() => elem.classList.remove("attack-effect"), 600);
+              }
+            }
+            showNotification(`${selectedCountry} fethedildi!`);
+          } else {
+            target.soldiers -= soldiersToSend;
+            flashLayer(target.layer, "#FF6347");
+            showNotification(`${selectedCountry} savunuldu!`);
+          }
+          nextTurn();
+        }
+        updateUI();
+        updateSelectedCountryInfo();
+      }
+    
+      function buySoldiers() {
+        const count = parseInt(document.getElementById("soldiers-to-buy").value);
+        if (isNaN(count) || count <= 0) {
+          showNotification("Geçerli bir asker sayısı girin!");
+          return;
+        }
+        const cost = count * 10;
+        const currentPlayerData = playerData[currentPlayer];
+        if (currentPlayerData.money < cost) {
+          showNotification("Yeterli paranız yok!");
+          return;
+        }
+        currentPlayerData.money -= cost;
+        currentPlayerData.soldiers += count;
+        showNotification(`${count} asker satın alındı.`);
+        animateWithAnimateCSS(document.getElementById(`money-${currentPlayer}`), "animate__bounce");
+        animateWithAnimateCSS(document.getElementById(`soldiers-${currentPlayer}`), "animate__shakeX");
+        updateUI();
+        updateSelectedCountryInfo();
+      }
+    
+      function buyBarracks() {
+        if (!selectedCountry) {
+          showNotification("Lütfen bir ülke seçin!");
+          return;
+        }
+        const target = countryData[selectedCountry];
+        if (target.owner !== currentPlayer) {
+          showNotification("Bu ülke size ait değil!");
+          return;
+        }
+        const currentPlayerData = playerData[currentPlayer];
+        if (currentPlayerData.money < 130) {
+          showNotification("Yeterli paranız yok!");
+          return;
+        }
+        if (currentPlayerData.petrol < 40) {
+          showNotification("Yeterli petrolünüz yok!");
+          return;
+        }
+        currentPlayerData.money -= 130;
+        currentPlayerData.petrol -= 40;
+        target.barracksCount = (target.barracksCount || 0) + 1;
+        showNotification("Asker kışlası kuruldu.");
+        updateUI();
+        updateSelectedCountryInfo();
+      }
+    
+      function buildFactory() {
+        if (!selectedCountry) {
+          showNotification("Lütfen bir ülke seçin!");
+          return;
+        }
+        const target = countryData[selectedCountry];
+        if (target.owner !== currentPlayer) {
+          showNotification("Bu ülke size ait değil!");
+          return;
+        }
+        const currentPlayerData = playerData[currentPlayer];
+        if (currentPlayerData.money < 250) {
+          showNotification("Yeterli paranız yok!");
+          return;
+        }
+        if (currentPlayerData.petrol < 90) {
+          showNotification("Yeterli petrolünüz yok!");
+          return;
+        }
+        currentPlayerData.money -= 250;
+        currentPlayerData.petrol -= 90;
+        target.factories = (target.factories || 0) + 1;
+        showNotification("Fabrika kuruldu.");
+        updateUI();
+        updateSelectedCountryInfo();
+      }
+    
+      // Rafine: 250 varil + 800$, kurulunca ülkenin üretim kapasitesini %20 artırır.
+      function buildRefinery() {
+        if (!selectedCountry) {
+          showNotification("Lütfen bir ülke seçin!");
+          return;
+        }
+        const target = countryData[selectedCountry];
+        if (target.owner !== currentPlayer) {
+          showNotification("Bu ülke size ait değil!");
+          return;
+        }
+        if (!target.oilProduction) {
+          showNotification("Bu ülkede üretim kapasitesi bulunmuyor!");
+          return;
+        }
+        const currentPlayerData = playerData[currentPlayer];
+        if (currentPlayerData.money < 800) {
+          showNotification("Yeterli paranız yok!");
+          return;
+        }
+        if (currentPlayerData.petrol < 250) {
+          showNotification("Yeterli petrolünüz yok! (250 varil gereklidir)");
+          return;
+        }
+        currentPlayerData.money -= 800;
+        currentPlayerData.petrol -= 250;
+        target.refineries = (target.refineries || 0) + 1;
+        showNotification("Rafine kuruldu. Üretim kapasitesi %20 arttı.");
+        updateUI();
+        updateSelectedCountryInfo();
+      }
+    
+      function pullSoldiers() {
+        if (!selectedCountry) {
+          showNotification("Bir ülke seçin!");
+          return;
+        }
+        const target = countryData[selectedCountry];
+        if (target.owner !== currentPlayer) {
+          showNotification("Bu ülke size ait değil!");
+          return;
+        }
+        const count = parseInt(document.getElementById("pull-soldiers-count").value);
+        if (isNaN(count) || count <= 0) {
+          showNotification("Geçerli bir asker sayısı girin!");
+          return;
+        }
+        if (target.soldiers < count) {
+          showNotification("Bu ülkede yeterli asker yok!");
+          return;
+        }
+        target.soldiers -= count;
+        playerData[currentPlayer].soldiers += count;
+        showNotification(`${selectedCountry} ülkesinden ${count} asker çekildi.`);
+        updateUI();
+        updateSelectedCountryInfo();
+      }
+    
+      // Tur sonunda: her oyuncunun sahip olduğu ülkelerde;
+      // - Kışla: her kışla 5 asker üretir.
+      // - Gelir: Fabrika varsa %25 artış uygulanır.
+      // - Üretim: Ülkelerin oilProduction değeri (refineri etkisiyle %20 artarak) kadar varil üretilir.
+      function nextTurn() {
+        playerData[currentPlayer].countries.forEach((cName) => {
+          const country = countryData[cName];
+          if (country.barracksCount) {
+            country.soldiers += 5 * country.barracksCount;
+          }
+          let effectiveIncome = country.income;
+          if (country.factories) {
+            effectiveIncome = Math.floor(country.income * (1 + 0.25 * country.factories));
+          }
+          playerData[currentPlayer].money += effectiveIncome;
+          animateWithAnimateCSS(document.getElementById(`money-${currentPlayer}`), "animate__bounce");
+          if (country.oilProduction) {
+            const effectiveProduction = Math.floor(country.oilProduction * (1 + 0.20 * (country.refineries || 0)));
+            playerData[currentPlayer].petrol += effectiveProduction;
+          }
+        });
+    
+        let totalPetrol = 0;
+        for (let i = 1; i <= totalPlayers; i++) {
+          totalPetrol += playerData[i].petrol;
+        }
+        document.getElementById("total-petrol").textContent = totalPetrol;
+    
+        if (currentPlayer === totalPlayers) {
+          currentRound++;
+          document.getElementById("current-round").textContent = currentRound;
+        }
+    
+        currentPlayer = (currentPlayer % totalPlayers) + 1;
+        showNotification(`Sıra ${playerData[currentPlayer].name} oyuncuya geçti.`, 1500);
+        updateCurrentPlayerUI();
+        updateUI();
+        updateSelectedCountryInfo();
+      }
+    
+      function sendMoney() {
+        const amount = parseInt(document.getElementById("money-to-send").value);
+        const recipient = parseInt(document.getElementById("recipient-player").value);
+        if (isNaN(amount) || amount <= 0) {
+          showNotification("Geçerli bir miktar girin!");
+          return;
+        }
+        const currentPlayerData = playerData[currentPlayer];
+        if (currentPlayerData.money < amount) {
+          showNotification("Yeterli paranız yok!");
+          return;
+        }
+        if (recipient === currentPlayer) {
+          showNotification("Kendinize para gönderemezsiniz!");
+          return;
+        }
+        currentPlayerData.money -= amount;
+        playerData[recipient].money += amount;
+        showNotification(`${amount}$, ${playerData[recipient].name} oyuncusuna gönderildi.`);
+        animateWithAnimateCSS(document.getElementById(`money-${currentPlayer}`), "animate__bounce");
+        animateWithAnimateCSS(document.getElementById(`money-${recipient}`), "animate__bounce");
+        updateUI();
+      }
+    
+      function sendPetrol() {
+        const amount = parseInt(document.getElementById("petrol-to-send").value);
+        const recipient = parseInt(document.getElementById("recipient-player-petrol").value);
+        if (isNaN(amount) || amount <= 0) {
+          showNotification("Geçerli bir miktar girin!");
+          return;
+        }
+        const currentPlayerData = playerData[currentPlayer];
+        if (currentPlayerData.petrol < amount) {
+          showNotification("Yeterli petrolünüz yok!");
+          return;
+        }
+        if (recipient === currentPlayer) {
+          showNotification("Kendinize petrol gönderemezsiniz!");
+          return;
+        }
+        currentPlayerData.petrol -= amount;
+        playerData[recipient].petrol += amount;
+        showNotification(`${amount} varil, ${playerData[recipient].name} oyuncusuna gönderildi.`);
+        updateUI();
+      }
+    
+      /*****************************************************************
+       * EVENT LİSTENERLERİN EKLENMESİ
+       *****************************************************************/
+      document.getElementById("attack-btn").addEventListener("click", attack);
+      document.getElementById("buy-soldiers-btn")?.addEventListener("click", buySoldiers);
+      document.getElementById("buy-barracks-btn").addEventListener("click", buyBarracks);
+      document.getElementById("build-factory-btn").addEventListener("click", buildFactory);
+      document.getElementById("build-refinery-btn").addEventListener("click", buildRefinery);
+      document.getElementById("send-money-btn").addEventListener("click", sendMoney);
+      document.getElementById("send-petrol-btn").addEventListener("click", sendPetrol);
+      document.getElementById("end-turn-btn").addEventListener("click", nextTurn);
+      document.getElementById("pull-soldiers-btn").addEventListener("click", pullSoldiers);
+    });
+  </script>
+</body>
+</html>
