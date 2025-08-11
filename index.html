@@ -12,9 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
 
   <style>
-    :root{
-      --bg:#0b1220; --panel:#111A2B; --panel2:#0F1626; --accent:#34d399; --accent2:#60a5fa; --danger:#ef4444; --warning:#f59e0b; --text:#E6EDF6;
-    }
+    :root{ --bg:#0b1220; --panel:#111A2B; --panel2:#0F1626; --accent:#34d399; --accent2:#60a5fa; --danger:#ef4444; --warning:#f59e0b; --text:#E6EDF6; }
     html,body{height:100%; background:var(--bg); color:var(--text); font-family:'Montserrat',system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,"Fira Sans","Droid Sans","Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol"}
     #app{height:100%; display:grid; grid-template-rows:auto 1fr auto}
     #map{height:100%; width:100%}
@@ -28,7 +26,7 @@
 
     .tag{font-size:.75rem; padding:.15rem .5rem; border-radius:.4rem; border:1px solid rgba(255,255,255,.1)}
 
-    /* Marker icons via DIVs so we can style/animate */
+    /* Marker icons */
     .unit, .building{ position:relative; display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; border-radius:999px; border:2px solid rgba(0,0,0,.3); box-shadow:0 8px 20px rgba(0,0,0,.35)}
     .unit{ width:22px; height:22px; font-size:12px }
     .building{ width:28px; height:28px; font-size:14px }
@@ -46,9 +44,10 @@
     .factory::after{ content:"🏭" }
     .barracks::after{ content:"🎖️" }
 
-    /* Selection ring */
+    /* Selection visuals */
     .sel{ outline:3px solid rgba(255,255,255,.7); outline-offset:2px; animation:pulse 1.2s ease-in-out infinite }
     @keyframes pulse{ 0%{outline-color:rgba(255,255,255,.7)} 50%{outline-color:rgba(255,255,255,.2)} 100%{outline-color:rgba(255,255,255,.7)} }
+    .select-box{ position:absolute; border:1px dashed #93c5fd; background:rgba(59,130,246,.15); pointer-events:none; z-index:6000 }
 
     /* Healthbar */
     .hpbar{ position:absolute; bottom:-4px; left: 50%; width: 44px; height:3px; background:rgba(255,255,255,.15); border-radius: 999px; overflow:hidden; transform: translateX(-50%)}
@@ -81,7 +80,7 @@
         <div class="text-xl font-extrabold tracking-wide">GLOBAL <span class="text-emerald-400">RTS</span></div>
         <div class="hidden md:flex items-center gap-2 text-sm opacity-80">
           <span class="tag bg-emerald-500/10 border-emerald-400/30">Uydu Haritası</span>
-          <span class="tag bg-sky-500/10 border-sky-400/30">Canlı Savaş</span>
+          <span class="tag bg-sky-500/10 border-sky-400/30">Çoklu/Daire Seçim</span>
           <span class="tag bg-yellow-500/10 border-yellow-400/30">AI Rakip</span>
         </div>
       </div>
@@ -111,6 +110,10 @@
           <span>🎯 Davranış:</span>
           <button id="stanceBtn" class="btn bg-emerald-500/15">Agresif</button>
         </div>
+        <div class="glass rounded-xl px-3 py-2 text-xs flex items-center gap-2">
+          <button id="stopBtn" class="btn bg-white/10">⏹ Durdur (S)</button>
+          <button id="aMoveBtn" class="btn bg-white/10">⚔️ A-Yürüyüş (A)</button>
+        </div>
         <button id="newGame" class="btn bg-emerald-500/20 border-emerald-400/30">↻ Yeni Oyun</button>
         <button id="helpBtn" class="btn bg-sky-500/20 border-sky-400/30">❔ Yardım</button>
         <button id="runTests" class="btn bg-white/10">🧪 Test</button>
@@ -123,7 +126,7 @@
     <div id="map"></div>
 
     <!-- LEFT ACTION BAR -->
-    <div class="glass rounded-2xl p-3 absolute left-3 top-3 z-[5000] w-[280px]">
+    <div class="glass rounded-2xl p-3 absolute left-3 top-3 z-[5000] w-[320px]">
       <div class="text-sm font-bold uppercase tracking-wide mb-2 opacity-70">İnşa Et</div>
       <div class="grid grid-cols-2 gap-2 mb-3">
         <button class="btn bg-white/5 hover:bg-white/10" data-build="mill">🌾 Değirmen <span class="opacity-70 text-xs">(💰100)</span></button>
@@ -131,17 +134,25 @@
         <button class="btn bg-white/5 hover:bg-white/10" data-build="port">⚓ Liman <span class="opacity-70 text-xs">(💰200)</span></button>
         <button class="btn bg-white/5 hover:bg-white/10" data-build="barracks">🎖️ Kışla <span class="opacity-70 text-xs">(💰100)</span></button>
         <button class="btn bg-white/5 hover:bg-white/10 col-span-2" data-build="factory">🏭 Tank Fabrikası <span class="opacity-70 text-xs">(💰150 + 🛢️50)</span></button>
+        <button class="btn bg-white/5 hover:bg-white/10 col-span-1" id="wallMode">🧱 Duvar (çiz)</button>
+        <button class="btn bg-white/5 hover:bg-white/10 col-span-1" id="gateMode">🚪 Kapı (çiz)</button>
       </div>
 
       <div class="text-sm font-bold uppercase tracking-wide mb-2 opacity-70">Üret (Seçili Bina)</div>
       <div id="prodPanel" class="grid grid-cols-1 gap-2 text-sm">
         <div class="opacity-60">Bir bina seçin…</div>
       </div>
-      <div class="mt-3 text-xs opacity-70">İpucu: Bir <b>bina</b> seçtiğinde buradan üretim yapabilirsin. <b>Base</b>: Kepçe • <b>Kışla</b>: Asker • <b>Fabrika</b>: Tank • <b>Liman</b>: Gemi</div>
+      <div class="mt-3 text-xs opacity-70 space-y-1">
+        <div><b>Kare seçim:</b> Shift + sürükle</div>
+        <div><b>Daire seçim:</b> Ctrl + sürükle</div>
+        <div><b>Hareket:</b> Haritaya tıkla • <b>Saldır</b>: Düşmana Alt+tıkla • <b>A-Yürüyüş</b>: (A) sonra hedefe tıkla</div>
+        <div><b>Durdur:</b> ⏹ veya S</div>
+        <div><b>Duvar/Kapı:</b> Butona bas, noktalarla çiz, <b>çift tıkla</b> bitir.</div>
+      </div>
     </div>
 
     <!-- RIGHT PANEL: QUEUE & LOG -->
-    <div class="glass rounded-2xl p-3 absolute right-3 top-3 z-[5000] w-[320px]">
+    <div class="glass rounded-2xl p-3 absolute right-3 top-3 z-[5000] w-[360px]">
       <div class="text-sm font-bold uppercase tracking-wide mb-2 opacity-70">Kepçe Görev Kuyruğu</div>
       <ul id="queue" class="space-y-1 text-sm"></ul>
       <div class="mt-3 text-sm font-bold uppercase tracking-wide mb-2 opacity-70">Savaş Günlüğü</div>
@@ -161,12 +172,12 @@
   <div class="glass rounded-2xl p-6 max-w-xl text-sm">
     <div class="text-lg font-bold mb-2">Nasıl Oynanır?</div>
     <ul class="list-disc pl-5 space-y-2">
-      <li>Oyun başladığında aynı şehirde, fakat <b>biraz daha uzak</b> iki üs kurulur (siz ve AI).</li>
-      <li><b>İnşa</b>: Tipi seçin ve haritada yer tıklayın. Kepçe gidip kurar (Fabrika 60sn, diğerleri 30sn).</li>
-      <li><b>Üretim</b> bina üzerinden yapılır: <b>Üs</b>→Kepçe, <b>Kışla</b>→Asker, <b>Fabrika</b>→Tank, <b>Liman</b>→Gemi.</li>
-      <li><b>Birim hareket</b>: Seç ve haritada tıkla. <b>Kara birimleri</b> denize gidemez; <b>Gemiler</b> karaya çıkamaz.</li>
-      <li><b>Gelir</b>: Değirmen para, Rafineri petrol, Liman para üretimine %20 global bonus.</li>
-      <li>Davranış: Agresif/Tut. Hız: 1x–100x.</li>
+      <li>Başlangıç: Aynı şehirde fakat uzak konuşlanma (3–12 km). Uydu haritası üzerinde.</li>
+      <li>İnşa: Tipi seç ve haritada tıkla; kepçe gider kurar (Fabrika 60sn, diğerleri 30sn). <b>Liman</b> otomatik <b>sahile snap</b> edilir.</li>
+      <li>Üretim: Bina seç → panelden üret. Üs→Kepçe, Kışla→Asker, Fabrika→Tank, Liman→Gemi.</li>
+      <li>Hareket: Seç ve haritaya tıkla. Kara birimleri denize girmez, gemiler karaya çıkmaz (kıyıda durur).</li>
+      <li>Seçim: Shift+kare, Ctrl+daire. Durdur: S. Saldır: Alt+tık. <b>A-Yürüyüş:</b> (A) sonra hedefe tıkla.</li>
+      <li>Duvar/Kapı: Nokta nokta çiz, çift tıkla bitir. Duvarlar segment bazında HP/enerjiye sahiptir; saldırılan <b>yalnızca o parça</b> kırılır. Kapılar dost birliklere geçiş verir.</li>
     </ul>
     <div class="mt-4 text-right"><button class="btn bg-white/10" onclick="document.getElementById('helpModal').classList.remove('show')">Kapat</button></div>
   </div>
@@ -174,11 +185,10 @@
 
 <script>
 (()=>{
-  // --- WORLD RTS (Single-file) ---
-  // Lightweight RTS core built on Leaflet. No external game engine.
-
-  /* -------------------------- Map Setup -------------------------- */
-  const map = L.map('map', { zoomControl:true, worldCopyJump:true, minZoom:2, maxZoom:18 });
+  /* =========================
+     MAP SETUP
+  ========================= */
+  const map = L.map('map', { zoomControl:true, worldCopyJump:true, minZoom:2, maxZoom:18, boxZoom:false });
   // Esri World Imagery (Satellite) — free, no key required
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: 'Tiles \u00a9 Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
@@ -196,7 +206,9 @@
     return el;
   })();
 
-  /* -------------------------- UI Refs -------------------------- */
+  /* =========================
+     UI REFS
+  ========================= */
   const moneyEl = document.getElementById('money');
   const oilEl = document.getElementById('oil');
   const excEl = document.getElementById('excCount');
@@ -223,594 +235,324 @@
     stanceBtn.textContent = playerStance==='aggressive'? 'Agresif' : 'Tut';
     stanceBtn.className = 'btn ' + (playerStance==='aggressive'? 'bg-emerald-500/15' : 'bg-yellow-500/20');
   });
+  document.getElementById('stopBtn').addEventListener('click', stopSelected);
+  window.addEventListener('keydown', (e)=>{ if(e.key.toLowerCase()==='s') stopSelected(); });
+
+  let attackMoveMode=false;
+  const aMoveBtn = document.getElementById('aMoveBtn');
+  aMoveBtn.addEventListener('click', ()=> toggleAMove());
+  window.addEventListener('keydown', (e)=>{ if(e.key.toLowerCase()==='a'){ toggleAMove(); } });
+  function toggleAMove(){ attackMoveMode = !attackMoveMode; aMoveBtn.classList.toggle('bg-emerald-500/20', attackMoveMode); hint(attackMoveMode? 'A-Yürüyüş aktif: hedefe tıklayın.':'A-Yürüyüş kapalı.'); }
 
   function setSpeed(v){ gameSpeed = Math.max(1, Math.min(100, v)); speedRange.value = String(gameSpeed); speedLbl.textContent = gameSpeed+'x'; hint('Hız: '+gameSpeed+'x'); }
-
   function hint(msg){ hintEl.textContent = msg }
   function log(msg){ const t = document.createElement('div'); t.textContent = msg; logEl.prepend(t); }
 
-  /* -------------------------- Game Data -------------------------- */
+  /* =========================
+     GAME DATA
+  ========================= */
   const LAND_SEEDS = [
-    [41.0082,28.9784], // Istanbul
-    [39.9208,32.8541], // Ankara
-    [48.8566,2.3522],  // Paris
-    [52.52,13.405],    // Berlin
-    [40.7128,-74.0060],// NYC
-    [34.0522,-118.2437], // LA
-    [35.6762,139.6503], // Tokyo
-    [19.4326,-99.1332], // Mexico City
-    [31.2304,121.4737], // Shanghai
-    [28.6139,77.2090], // Delhi
-    [30.0444,31.2357], // Cairo
-    [6.5244,3.3792],   // Lagos
-    [-33.8688,151.2093], // Sydney
-    [37.7749,-122.4194], // SF
-    [-23.5505,-46.6333], // Sao Paulo
-    [41.9028,12.4964], // Rome
-    [50.1109,8.6821],  // Frankfurt
-    [59.3293,18.0686], // Stockholm
-    [1.3521,103.8198], // Singapore
-    [35.6892,51.3890], // Tehran
-    [41.015, 29.2],    // East of Istanbul
-    [38.4237,27.1428], // Izmir
+    [41.0082,28.9784],[39.9208,32.8541],[48.8566,2.3522],[52.52,13.405],[40.7128,-74.0060],[34.0522,-118.2437],[35.6762,139.6503],[19.4326,-99.1332],[31.2304,121.4737],[28.6139,77.2090],[30.0444,31.2357],[6.5244,3.3792],[-33.8688,151.2093],[37.7749,-122.4194],[-23.5505,-46.6333],[41.9028,12.4964],[50.1109,8.6821],[59.3293,18.0686],[1.3521,103.8198],[35.6892,51.3890],[41.015, 29.2],[38.4237,27.1428]
   ];
 
-  // Başlangıç mesafesini biraz daha açtık (aynı şehir, ama daha uzak)
-  const START = { CITY_ZOOM: 10, PLAYER_RADIUS: 3000, AI_RADIUS: 5500, SEPARATION_DEG: Math.PI * 0.9 };
+  const START = { CITY_ZOOM: 10, PLAYER_RADIUS: 3000, AI_RADIUS: 6000, SEPARATION_DEG: Math.PI * 0.8 };
+
+  // Duvar maliyeti ve yapım hızı (metre başına)
+  const WALL = { moneyPer100m: 8, oilPer100m: 2, hp: 400, segLen: 120, buildSecPer100m: 6 };
 
   const COST = {
-    mill:      { money:100, oil:0, build:30 },
-    refinery:  { money:50,  oil:0, build:30 },
-    port:      { money:200, oil:0, build:30 },
-    factory:   { money:150, oil:50, build:60 },
-    barracks:  { money:100, oil:0, build:30 },
-    tank:      { money:80,  oil:40 },
-    soldier:   { money:30,  oil:0 },
-    excavator: { money:70,  oil:20 },
-    ship:      { money:120, oil:60 },
+    mill:{ money:100, oil:0, build:30 },
+    refinery:{ money:50, oil:0, build:30 },
+    port:{ money:200, oil:0, build:30 },
+    factory:{ money:150, oil:50, build:60 },
+    barracks:{ money:100, oil:0, build:30 },
+    tank:{ money:80, oil:40 },
+    soldier:{ money:30, oil:0 },
+    excavator:{ money:70, oil:20 },
+    ship:{ money:120, oil:60 },
   };
 
   const STATS = {
-    kepce:   { hp:120, speed:18, range:0,   dps:0,  medium:'land' },
-    soldier: { hp:60,  speed:22, range:45,  dps:10, medium:'land' },
-    tank:    { hp:200, speed:16, range:80,  dps:25, medium:'land' },
-    ship:    { hp:220, speed:20, range:90,  dps:18, medium:'water' },
-    base:    { hp:800 },
-    mill:    { hp:220 },
-    refinery:{ hp:240 },
-    port:    { hp:260 },
-    factory: { hp:340 },
-    barracks:{ hp:280 },
+    kepce:{ hp:120, speed:18, range:0, dps:0, medium:'land' },
+    soldier:{ hp:60, speed:22, range:45, dps:10, medium:'land' },
+    tank:{ hp:200, speed:16, range:80, dps:25, medium:'land' },
+    ship:{ hp:240, speed:20, range:90, dps:18, medium:'water' },
+    base:{ hp:800 }, mill:{ hp:220 }, refinery:{ hp:240 }, port:{ hp:260 }, factory:{ hp:340 }, barracks:{ hp:280 }
   };
 
-  const RATES = {
-    moneyPerMill: 3,
-    oilPerRef: 2,
-    tickSec: 3,
-    portBonus: 0.20,
-  }
-
-  const LAYERS = { units:L.layerGroup().addTo(map), buildings:L.layerGroup().addTo(map) };
+  const RATES = { moneyPerMill:3, oilPerRef:2, tickSec:3, portBonus:0.20 };
+  const LAYERS = { units:L.layerGroup().addTo(map), buildings:L.layerGroup().addTo(map), walls:L.layerGroup().addTo(map) };
 
   function randInt(n){ return Math.floor(Math.random()*n) }
   function choose(arr){ return arr[randInt(arr.length)] }
   function distance(a,b){ return map.distance(a,b) }
-
-  function latlngTowards(from, to, distMeters){
-    const total = distance(from,to);
-    if(total===0 || distMeters>=total) return to;
-    const r = distMeters/total;
-    const lat = from.lat + (to.lat - from.lat)*r;
-    const lng = from.lng + (to.lng - from.lng)*r;
-    return L.latLng(lat,lng);
-  }
-
-  function offsetDir(latlng, meters, angleRad){
-    const d=meters, ang=angleRad;
-    const lat = latlng.lat + (d*Math.cos(ang))/111320;
-    const lng = latlng.lng + (d*Math.sin(ang))/(40075000*Math.cos(latlng.lat*Math.PI/180)/360);
-    return L.latLng(lat,lng);
-  }
+  function latlngTowards(from, to, distMeters){ const total = distance(from,to); if(total===0 || distMeters>=total) return to; const r = distMeters/total; const lat = from.lat + (to.lat - from.lat)*r; const lng = from.lng + (to.lng - from.lng)*r; return L.latLng(lat,lng); }
+  function offsetDir(latlng, meters, angleRad){ const d=meters, ang=angleRad; const lat = latlng.lat + (d*Math.cos(ang))/111320; const lng = latlng.lng + (d*Math.sin(ang))/(40075000*Math.cos(latlng.lat*Math.PI/180)/360); return L.latLng(lat,lng); }
   function offset(latlng, meters){ return offsetDir(latlng, meters, Math.random()*Math.PI*2); }
 
-  /* -------------------------- Very Simple Land Mask (coarse) -------------------------- */
-  // Amaç: Kara birimleri okyanusa tıklayınca gitmesin, gemiler okyanusta kalsın.
-  // Basit kıta kutuları ile yaklaşık kontrol (kesin kıyı çizgisi değil — hafif hatalar olabilir).
-  const LAND_BOXES = [
-    // [minLat, minLng, maxLat, maxLng]
-    [5,-168,83,-52],    // Kuzey Amerika (yaklaşık)
-    [-56,-82,13,-34],   // Güney Amerika
-    [35,-10,72,40],     // Avrupa
-    [-35,-18,37,52],    // Afrika
-    [5,26,81,180],      // Asya (yaklaşık)
-    [-45,110,-10,160],  // Avustralya
-    [59,-74,84,-12],    // Grönland
+  /* =========================
+     LAND/WATER (COARSE MASK + SNAP)
+  ========================= */
+  const LAND_POLYS = [
+    [[83,-168],[83,-52],[49,-52],[8,-52],[8,-168]],
+    [[13,-82],[-56,-82],[-56,-34],[13,-34]],
+    [[72,-10],[72,40],[35,40],[35,-10]],
+    [[37,-18],[37,52],[-35,52],[-35,-18]],
+    [[81,26],[81,180],[5,180],[5,26]],
+    [[-10,110],[-10,160],[-45,160],[-45,110]],
+    [[84,-74],[84,-12],[59,-12],[59,-74]],
+    [[60,-11],[60,2],[49,2],[49,-11]],
+    [[46,128],[46,147],[30,147],[30,128]],
+    [[-11,43],[-11,51],[-26,51],[-26,43]]
   ];
-  function isLand(latlng){
-    const {lat,lng} = latlng;
-    for(const b of LAND_BOXES){ if(lat>=b[0] && lat<=b[2] && lng>=b[1] && lng<=b[3]) return true; }
-    return false;
-  }
-  function canUnitGoTo(u, dest){
-    const medium = STATS[u.unitType].medium || 'land';
-    const land = isLand(dest);
-    if(medium==='land') return land; // denize gitmesin
-    if(medium==='water') return !land; // karaya çıkmasın
-    return true;
+  const WATER_BOXES = [ [30,-6,46,36],[40,27,47,42],[36,46,47,55],[53,9,66,30],[12,34,30,44],[24,48,30,56],[9,-90,27,-60],[41,-92,50,-75],[-25,50,10,80] ];
+  function pointInPoly(lat, lng, poly){ let inside=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const xi=poly[i][0], yi=poly[i][1]; const xj=poly[j][0], yj=poly[j][1]; const intersect=((yi>lng)!=(yj>lng)) && (lat < (xj - xi) * (lng - yi) / (yj - yi + 1e-12) + xi); if(intersect) inside=!inside; } return inside; }
+  function inBox(lat,lng,box){ return lat>=box[0] && lat<=box[2] && lng>=box[1] && lng<=box[3]; }
+  function isLand(ll){ const lat=ll.lat, lng=ll.lng; let land=false; for(const p of LAND_POLYS){ if(pointInPoly(lat,lng,p)){ land=true; break; } } if(!land) return false; for(const w of WATER_BOXES){ if(inBox(lat,lng,w)) return false; } return true; }
+  function nearWater(ll, radius=600){ if(!isLand(ll)) return false; for(let a=0;a<2*Math.PI;a+=Math.PI/20){ const p=offsetDir(ll, radius, a); if(!isLand(p)) return true; } return false; }
+  function snapToCoast(ll, max=800){
+    // Karada değilse veya karada ama suya uzaksa, kıyı çizgisine yakındaki en iyi noktayı bul
+    const step=60;
+    let best=null, bestScore=Infinity;
+    for(let r=40;r<=max;r+=step){
+      for(let a=0;a<2*Math.PI;a+=Math.PI/20){
+        const p=offsetDir(ll,r,a);
+        if(isLand(p) && nearWater(p,120)){
+          // su/karaya yakın ve karada olmalı; merkeze yakınlığı skorla
+          const s = distance(ll,p);
+          if(s<bestScore){ best=p; bestScore=s; }
+        }
+      }
+    }
+    return best; // null olabilir
   }
 
-  /* -------------------------- Entities -------------------------- */
+  function clampToMedium(u, dest){
+    const wantLand = (STATS[u.unitType].medium||'land')==='land';
+    const total = Math.max(1, distance(u.pos, dest));
+    const step = 160; // örnekleme adımı
+    let lastGood = u.pos; let d=0; while(d<=total){
+      const p = latlngTowards(u.pos, dest, d);
+      const land = isLand(p);
+      if( (wantLand && !land) || (!wantLand && land) ) return lastGood; // kıyıda dur
+      lastGood = p; d += step;
+    }
+    return dest;
+  }
+
+  /* =========================
+     ENTITIES
+  ========================= */
   let ENT_ID=1; const ENT_INDEX=new Map();
   const Side = { PLAYER:'player', AI:'ai' };
 
-  class Entity{
-    constructor(opts){ Object.assign(this, opts); this.id = ENT_ID++; this.dead=false; ENT_INDEX.set(this.id,this); }
+  class Entity{ constructor(opts){ Object.assign(this, opts); this.id = ENT_ID++; this.dead=false; ENT_INDEX.set(this.id,this); } }
+  class Unit extends Entity{ constructor(opts){ super(opts); this.hp=STATS[this.unitType].hp; this.speed=STATS[this.unitType].speed; this.range=STATS[this.unitType].range||0; this.dps=STATS[this.unitType].dps||0; this.medium=STATS[this.unitType].medium||'land'; this.dest=null; this.target=null; this.marker=createMarker(this,true); } }
+  class Building extends Entity{ constructor(opts){ super(opts); this.hp=STATS[this.buildingType].hp; this.marker=createMarker(this,false); } }
+  class WallSegment extends Entity{
+    constructor(opts){ super(opts); this.buildingType='wall'; this.hp=WALL.hp; this.latlngs=opts.latlngs; this.gate=!!opts.gate; this.side=opts.side||Side.PLAYER; this.underConstruction=true; this.buildProgress=0; this.buildNeeded = (distance(this.latlngs[0],this.latlngs[1]) / 100) * WALL.buildSecPer100m; this.poly=L.polyline(this.latlngs, gateStyle(this,false)).addTo(LAYERS.walls); this.poly.on('click',()=> selectWall(this)); }
   }
+  function gateStyle(seg, built){ return seg?.gate? { color:'#2dd4bf', weight:5, opacity: built?0.95:0.7, dashArray: built? '1 12' : '6 6' } : { color: built? '#93c5fd' : '#fbbf24', weight:5, opacity: built?0.9:0.8, dashArray: built? null : '6 6' }; }
 
-  class Unit extends Entity{
-    constructor(opts){
-      super(opts);
-      this.hp = STATS[this.unitType].hp;
-      this.speed = STATS[this.unitType].speed; // m/s
-      this.range = STATS[this.unitType].range||0; // m
-      this.dps = STATS[this.unitType].dps||0; // per sec
-      this.medium = STATS[this.unitType].medium||'land';
-      this.dest = null; this.target=null; this.moveVec=null;
-      this.marker = createMarker(this, true);
-    }
-  }
+  const player = { money:180, oil:80, units:[], buildings:[], base:null, ports:()=>player.buildings.filter(b=>b.buildingType==='port').length };
+  const ai     = { money:180, oil:80, units:[], buildings:[], base:null, lastThink:0 };
 
-  class Building extends Entity{
-    constructor(opts){
-      super(opts);
-      this.hp = STATS[this.buildingType].hp;
-      this.marker = createMarker(this, false);
-    }
-  }
+  const selection = new Set(); let buildMode=null; let playerStance='aggressive';
 
-  const player = { money:120, oil:50, units:[], buildings:[], base:null, ports:()=>player.buildings.filter(b=>b.buildingType==='port').length };
-  const ai     = { money:120, oil:50, units:[], buildings:[], base:null, lastThink:0 };
+  function updateHUD(){ moneyEl.textContent=Math.floor(player.money); oilEl.textContent=Math.floor(player.oil); const units=player.units; excEl.textContent=units.filter(u=>u.unitType==='kepce').length; soldierEl.textContent=units.filter(u=>u.unitType==='soldier').length; tankEl.textContent=units.filter(u=>u.unitType==='tank').length; shipEl.textContent=units.filter(u=>u.unitType==='ship').length; }
 
-  const selection = new Set();
-  let buildMode=null; // selected building type
-  let playerStance = 'aggressive'; // 'aggressive' | 'hold'
+  function createMarker(ent,isUnit){ const isPlayer = ent.side===Side.PLAYER; const html = `<div class="${isUnit?'unit':'building'} ${isPlayer?'player':'ai'} ${cssClass(ent)}"><div class="hpbar"><div class="hpfill" style="width:100%"></div></div></div>`; const icon=L.divIcon({ className:'', html, iconSize:[isUnit?22:28,isUnit?22:28] }); const marker=L.marker(ent.pos,{icon,zIndexOffset:isUnit?1000:500}).addTo(isUnit?LAYERS.units:LAYERS.buildings); marker.on('click',(e)=> onMarkerClick(ent,e)); marker.on('contextmenu',(e)=> onMarkerRightClick(ent,e)); marker.on('dblclick',()=> quickProduce(ent)); return marker; }
+  function cssClass(ent){ if(ent.unitType){ if(ent.unitType==='kepce') return 'kepce'; if(ent.unitType==='soldier') return 'soldier'; if(ent.unitType==='tank') return 'tank'; if(ent.unitType==='ship') return 'ship'; } else if(ent.buildingType){ if(ent.isBase) return 'base'; return ent.buildingType; } return 'neutral' }
 
-  function updateHUD(){
-    moneyEl.textContent = Math.floor(player.money);
-    oilEl.textContent = Math.floor(player.oil);
-    const units = player.units;
-    excEl.textContent = units.filter(u=>u.unitType==='kepce').length;
-    soldierEl.textContent = units.filter(u=>u.unitType==='soldier').length;
-    tankEl.textContent = units.filter(u=>u.unitType==='tank').length;
-    shipEl.textContent = units.filter(u=>u.unitType==='ship').length;
-  }
-
-  function createMarker(ent, isUnit){
-    const isPlayer = ent.side===Side.PLAYER;
-    const html = `<div class="${isUnit?'unit':'building'} ${isPlayer?'player':'ai'} ${cssClass(ent)}">
-      <div class="hpbar"><div class="hpfill" style="width:100%"></div></div>
-    </div>`;
-    const icon = L.divIcon({ className:'', html, iconSize:[ isUnit?22:28, isUnit?22:28 ] });
-    const marker = L.marker(ent.pos, { icon, zIndexOffset:isUnit? 1000 : 500 }).addTo(isUnit? LAYERS.units : LAYERS.buildings);
-    marker.on('click', (e)=> onMarkerClick(ent, e));
-    marker.on('contextmenu', (e)=> onMarkerRightClick(ent, e));
-    marker.on('dblclick', ()=> quickProduce(ent));
-    return marker;
-  }
-
-  function cssClass(ent){
-    if(ent.unitType){
-      if(ent.unitType==='kepce') return 'kepce';
-      if(ent.unitType==='soldier') return 'soldier';
-      if(ent.unitType==='tank') return 'tank';
-      if(ent.unitType==='ship') return 'ship';
-    } else if(ent.buildingType){
-      if(ent.isBase) return 'base';
-      return ent.buildingType;
-    }
-    return 'neutral'
-  }
-
-  function setSelected(ent, val){
-    const el = ent.marker.getElement()?.firstChild; // div.unit/building
-    if(!el) return;
-    if(val) { el.classList.add('sel'); selection.add(ent) }
-    else { el.classList.remove('sel'); selection.delete(ent) }
-    renderProductionPanel();
-  }
-
+  function setSelected(ent,val){ const el=ent.marker?.getElement()?.firstChild; if(!el) return; if(val){ el.classList.add('sel'); selection.add(ent) } else { el.classList.remove('sel'); selection.delete(ent) } renderProductionPanel(); }
   function clearSelection(){ [...selection].forEach(ent=> setSelected(ent,false)); renderProductionPanel(); }
 
-  function onMarkerClick(ent, e){
-    if(e.originalEvent.shiftKey){ setSelected(ent, !selection.has(ent)); }
-    else { clearSelection(); setSelected(ent, true); }
-  }
+  function onMarkerClick(ent,e){ if(e.originalEvent.altKey){ if(selection.size>0){ selection.forEach(s=>{ if(s instanceof Unit && s.dps>0){ s.target=ent; s.dest=ent.pos; } }); hint('Saldırı emri.'); } return; } if(e.originalEvent.shiftKey){ setSelected(ent, !selection.has(ent)); } else { clearSelection(); setSelected(ent,true); } }
+  function onMarkerRightClick(ent,e){ /* future */ }
 
-  function onMarkerRightClick(ent, e){ /* future: context menu */ }
-
-  map.on('click', (e)=>{
-    if(buildMode){
-      const type = buildMode; buildMode=null; hint('Kepçe inşa için yola çıktı.');
-      const job = { type, pos:e.latlng };
-      enqueueBuildJob(player, job);
-    } else if(selection.size>0){
-      selection.forEach(ent=>{
-        if(ent instanceof Unit){
-          if(canUnitGoTo(ent, e.latlng)){ ent.dest = e.latlng; ent.target=null; }
-          else { hint(`${ent.unitType==='ship'?'Gemi':'Kara birimi'} burada ilerleyemez.`); }
-        }
-      });
+  /* =========================
+     SELECTION (RECT + CIRCLE)
+  ========================= */
+  let dragSel=null; let dragStart=null; const mapEl=document.getElementById('map'); let circleSel=null; let circleStart=null;
+  mapEl.addEventListener('mousedown', (ev)=>{
+    if(ev.button!==0) return; // only left
+    if(ev.ctrlKey){ // circle select
+      ev.preventDefault(); circleStart = L.point(ev.clientX, ev.clientY); circleSel = L.circle(map.containerPointToLatLng(circleStart), { radius:10, color:'#34d399', weight:2, fillOpacity:0.1 }).addTo(map);
+    } else if(ev.shiftKey){ // rect select
+      ev.preventDefault(); dragStart = {x:ev.clientX,y:ev.clientY}; dragSel=document.createElement('div'); dragSel.className='select-box'; dragSel.style.left=dragStart.x+'px'; dragSel.style.top=dragStart.y+'px'; document.body.appendChild(dragSel);
     }
   });
+  window.addEventListener('mousemove', (ev)=>{
+    if(circleSel){ const p=L.point(ev.clientX, ev.clientY); const r=map.distance(map.containerPointToLatLng(circleStart), map.containerPointToLatLng(p)); circleSel.setRadius(r); }
+    if(!dragSel) return; const x=Math.min(ev.clientX,dragStart.x), y=Math.min(ev.clientY,dragStart.y); const w=Math.abs(ev.clientX-dragStart.x), h=Math.abs(ev.clientY-dragStart.y); Object.assign(dragSel.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px'});
+  });
+  window.addEventListener('mouseup', (ev)=>{
+    if(circleSel){ const center=circleSel.getLatLng(); const r=circleSel.getRadius(); circleSel.remove(); circleSel=null; clearSelection(); player.units.forEach(u=>{ if(distance(center,u.pos)<=r) setSelected(u,true); }); hint(selection.size+' birim seçildi (daire).'); }
+    if(!dragSel) return; const rect=dragSel.getBoundingClientRect(); dragSel.remove(); dragSel=null; const tl=L.point(rect.left,rect.top), br=L.point(rect.right,rect.bottom); const b= L.latLngBounds(map.containerPointToLatLng(tl), map.containerPointToLatLng(br)); clearSelection(); player.units.forEach(u=>{ if(b.contains(u.pos)) setSelected(u,true); }); hint(selection.size+' birim seçildi (kare).');
+  });
 
-  map.on('contextmenu', (e)=>{ clearSelection(); hint('Seçim temizlendi.'); });
-
-  function enqueueBuildJob(sideObj, job){
-    const kepces = sideObj.units.filter(u=>u.unitType==='kepce');
-    const free = kepces.find(k=>!k.job);
-    if(free){ free.job = job; free.dest = job.pos; updateQueueUI(); }
-    else { (sideObj.queue ||= []).push(job); updateQueueUI(); }
-  }
-
-  function updateQueueUI(){
-    queueEl.innerHTML = '';
-    const list = (player.units.filter(u=>u.unitType==='kepce').map(k=> k.job? `⛏️ ${labelOf(k.job.type)} kuruluyor` : '⏳ Boş') ).concat( (player.queue||[]).map(j=>`🧱 Sırada: ${labelOf(j.type)}`) );
-    list.forEach(t=>{ const li=document.createElement('li'); li.textContent=t; queueEl.appendChild(li) });
-  }
-
-  function labelOf(type){
-    const m={mill:'Değirmen', refinery:'Rafineri', port:'Liman', factory:'Tank Fabrikası', barracks:'Kışla', ship:'Gemi', soldier:'Asker', tank:'Tank', kepce:'Kepçe'}; return m[type]||type
-  }
-
-  /* -------------------------- Income -------------------------- */
-  let incomeTimer=0;
-  function incomeTick(dt){
-    incomeTimer += dt; if(incomeTimer < RATES.tickSec) return; incomeTimer=0;
-    const mills = player.buildings.filter(b=>b.buildingType==='mill').length;
-    const refs  = player.buildings.filter(b=>b.buildingType==='refinery').length;
-    const ports = player.ports();
-    let moneyAdd = mills * RATES.moneyPerMill * (1 + ports*RATES.portBonus);
-    let oilAdd = refs * RATES.oilPerRef;
-    player.money += moneyAdd; player.oil += oilAdd;
-
-    const amills = ai.buildings.filter(b=>b.buildingType==='mill').length;
-    const arefs  = ai.buildings.filter(b=>b.buildingType==='refinery').length;
-    const aports = ai.buildings.filter(b=>b.buildingType==='port').length;
-    let amoneyAdd = amills * RATES.moneyPerMill * (1 + aports*RATES.portBonus);
-    let aoilAdd = arefs * RATES.oilPerRef;
-    ai.money += amoneyAdd; ai.oil += aoilAdd;
-
-    updateHUD();
-  }
-
-  /* -------------------------- Combat -------------------------- */
-  function inRange(u, v){ return distance(u.pos, v.pos) <= (u.range||0) }
-
-  function dealDamage(attacker, target, dt){
-    if(attacker.dps<=0) return;
-    target.hp -= attacker.dps * dt;
-    updateHPBar(target);
-    if(target.hp <= 0) destroyEntity(target, attacker);
-    if(Math.random()<.3) drawBeam(attacker.pos, target.pos);
-  }
-
-  function updateHPBar(ent){
-    const el = ent.marker.getElement(); if(!el) return; const fill = el.querySelector('.hpfill');
-    const maxHP = ent.unitType? STATS[ent.unitType].hp : STATS[ent.buildingType].hp;
-    const pct = Math.max(0, Math.min(100, (ent.hp/maxHP)*100));
-    fill.style.width = pct+'%';
-    fill.style.background = pct<33? 'linear-gradient(90deg,#ef4444,#dc2626)': pct<66? 'linear-gradient(90deg,#f59e0b,#d97706)': 'linear-gradient(90deg,#22c55e,#16a34a)';
-  }
-
-  function drawBeam(a,b){
-    if(!svg) return;
-    const p1 = map.latLngToLayerPoint(a), p2 = map.latLngToLayerPoint(b);
-    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('x1',p1.x); line.setAttribute('y1',p1.y); line.setAttribute('x2',p2.x); line.setAttribute('y2',p2.y);
-    line.setAttribute('class','beam');
-    svg.appendChild(line);
-    setTimeout(()=> line.remove(), 160);
-  }
-
-  function destroyEntity(ent, killer){
-    ent.dead = true;
-    if(ent.marker){ ent.marker.remove(); }
-    if(ent.unitType){
-      const arr = ent.side===Side.PLAYER? player.units : ai.units; const i = arr.indexOf(ent); if(i>=0) arr.splice(i,1);
-    } else {
-      const arr = ent.side===Side.PLAYER? player.buildings : ai.buildings; const i = arr.indexOf(ent); if(i>=0) arr.splice(i,1);
-      if(ent.isBase){ if(ent.side===Side.PLAYER) endGame(false); else endGame(true); }
-    }
-    if(selection.has(ent)) selection.delete(ent);
-    if(killer) log(`${killer.side==='player'?'Bizim':'AI'} ${killer.unitType||killer.buildingType} birimi ${ent.unitType||ent.buildingType} yok etti.`);
-    updateHUD(); renderProductionPanel();
-  }
-
-  function endGame(win){
-    const modal = document.getElementById('helpModal');
-    const box = modal.querySelector('.glass');
-    modal.classList.add('show');
-    box.querySelector('.text-lg').textContent = win? 'Zafer!' : 'Yenilgi!';
-    box.querySelector('ul').innerHTML = `<li>${win? 'AI üssünü yok ettiniz. Harika komutanlık!' : 'Üssünüz yok edildi. Tekrar deneyin!'}</li>`;
-  }
-
-  /* -------------------------- Game Init -------------------------- */
-  function initGame(){
-    // Aynı şehir, ama daha uzak yerleştirme
-    const city = choose(LAND_SEEDS);
-    const center = L.latLng(city[0], city[1]);
-    const angle = Math.random() * Math.PI * 2;
-
-    const pPos = offsetDir(center, START.PLAYER_RADIUS, angle);
-    const aPos = offsetDir(center, START.AI_RADIUS, angle + START.SEPARATION_DEG);
-
-    const pBase = new Building({ side:Side.PLAYER, pos:pPos, buildingType:'base', isBase:true });
-    const aBase = new Building({ side:Side.AI,     pos:aPos, buildingType:'base', isBase:true });
-    player.base = pBase; ai.base = aBase; player.buildings.push(pBase); ai.buildings.push(aBase);
-
-    const pKep = new Unit({ side:Side.PLAYER, pos:offset(pBase.pos, 120), unitType:'kepce' }); player.units.push(pKep);
-    const aKep = new Unit({ side:Side.AI,     pos:offset(aBase.pos, 120), unitType:'kepce' }); ai.units.push(aKep);
-
-    map.setView(center, START.CITY_ZOOM);
-    updateHUD();
-    updateQueueUI();
-    hint('Aynı şehirde, ama daha uzak başlangıç! Bina seçerek üretim yapın.');
-
-    aiThink(0,true);
-  }
-
-  /* -------------------------- Build & Train (contextual) -------------------------- */
-  const buildBtns = document.querySelectorAll('[data-build]');
-  buildBtns.forEach(btn=> btn.addEventListener('click',()=>{
-    const type = btn.dataset.build;
-    if(player.money < (COST[type].money||0) || player.oil < (COST[type].oil||0)) { hint('Yetersiz kaynak.'); return; }
-    player.money -= (COST[type].money||0); player.oil -= (COST[type].oil||0); updateHUD();
-    buildMode = type; hint(`${labelOf(type)} için konum seçin.`);
-  }));
-
-  function renderProductionPanel(){
-    // Yalnızca oyuncu binası tek seçiliyken üretim göster
-    const items = [...selection].filter(x=> x instanceof Building && x.side===Side.PLAYER);
-    prodPanel.innerHTML = '';
-    if(items.length!==1){ prodPanel.innerHTML = '<div class="opacity-60">Bir bina seçin…</div>'; return; }
-    const b = items[0];
-    const wrap = document.createElement('div');
-    function addBtn(title, sub, kind){
-      const btn = document.createElement('button');
-      btn.className = 'btn bg-white/5 hover:bg-white/10 w-full justify-between';
-      btn.innerHTML = `<span>${title}</span><span class="opacity-70 text-xs">${sub}</span>`;
-      btn.onclick = ()=> produceFromBuilding(b, kind);
-      wrap.appendChild(btn);
-    }
-    if(b.isBase){ addBtn('⛏️ Kepçe Çıkar', `(💰${COST.excavator.money} + 🛢️${COST.excavator.oil})`, 'kepce'); }
-    if(b.buildingType==='barracks'){ addBtn('🪖 Asker Çıkar', `(💰${COST.soldier.money})`, 'soldier'); }
-    if(b.buildingType==='factory'){ addBtn('🛡️ Tank Çıkar', `(💰${COST.tank.money} + 🛢️${COST.tank.oil})`, 'tank'); }
-    if(b.buildingType==='port'){ addBtn('🚢 Gemi Çıkar', `(💰${COST.ship.money} + 🛢️${COST.ship.oil})`, 'ship'); }
-    if(!wrap.childNodes.length){ prodPanel.innerHTML = '<div class="opacity-60">Bu binadan üretim yok.</div>'; }
-    else prodPanel.appendChild(wrap);
-  }
-
-  function quickProduce(ent){
-    if(!(ent instanceof Building) || ent.side!==Side.PLAYER) return;
-    if(ent.isBase) return produceFromBuilding(ent,'kepce');
-    if(ent.buildingType==='barracks') return produceFromBuilding(ent,'soldier');
-    if(ent.buildingType==='factory') return produceFromBuilding(ent,'tank');
-    if(ent.buildingType==='port') return produceFromBuilding(ent,'ship');
-  }
-
-  function produceFromBuilding(building, kind){
-    // Kaynak kontrolü
-    const need = COST[kind==='kepce'?'excavator':kind];
-    if(player.money < (need.money||0) || player.oil < (need.oil||0)) { hint('Yetersiz kaynak.'); return; }
-    player.money -= (need.money||0); player.oil -= (need.oil||0); updateHUD();
-
-    // Çıkış pozisyonu: binanın etrafında uygun (kara/su) nokta ara
-    const pos = findSpawnAround(building.pos, kind);
-    if(!pos){ hint('Çıkış noktası bulunamadı (sahil gerekli olabilir).'); return; }
-
-    const u = new Unit({ side:Side.PLAYER, pos, unitType: kind });
-    player.units.push(u); updateHUD();
-    hint(`${labelOf(kind)} üretildi.`);
-  }
-
-  function findSpawnAround(origin, kind){
-    const wantLand = (kind!=='ship');
-    for(let r=30; r<=200; r+=20){
-      for(let k=0;k<10;k++){
-        const ang = Math.random()*Math.PI*2;
-        const p = offsetDir(origin, r, ang);
-        if( (wantLand && isLand(p)) || (!wantLand && !isLand(p)) ) return p;
-      }
-    }
-    // son çare: origin'in kendisi
-    if((wantLand && isLand(origin)) || (!wantLand && !isLand(origin))) return origin;
-    return null;
-  }
-
-  /* -------------------------- Kepçe Build Flow -------------------------- */
-  function tickKepce(dt, u, owner){
-    moveUnit(dt, u);
-    if(u.job && u.dest==null){
-      if(!u.buildTask){
-        const type = u.job.type;
-        const b = new Building({ side:u.side, pos:u.job.pos, buildingType:type });
-        b.buildProgress = 0; b.buildNeeded = COST[type].build; 
-        b.underConstruction = true;
-        b.marker.getElement().querySelector('.hpbar').insertAdjacentHTML('beforebegin','<div class="buildbar"><div class="buildfill" style="width:0%"></div></div>');
-        u.buildTask = b; 
-        (owner.buildings).push(b);
+  /* =========================
+     MAP CLICKS (BUILD/MOVE)
+  ========================= */
+  map.on('click', (e)=>{
+    // BUILDING placement
+    if(buildMode && buildMode!=='wall' && buildMode!=='gate'){
+      const type=buildMode; buildMode=null;
+      let pos=e.latlng;
+      if(type==='port'){
+        // Daha iyi liman kurma: otomatik sahile snap
+        if(!(isLand(pos) && nearWater(pos,600))){
+          const snapped=snapToCoast(pos,800);
+          if(!snapped){ hint('Liman için kıyı bulunamadı. Sahile yakın tıklayın.'); return; }
+          pos=snapped;
+        }
       } else {
-        u.buildTask.buildProgress += dt;
-        const pct = Math.min(100, (u.buildTask.buildProgress/u.buildTask.buildNeeded)*100);
-        const el = u.buildTask.marker.getElement(); if(el){ const f = el.querySelector('.buildfill'); if(f) f.style.width=pct+'%'; }
-        if(u.buildTask.buildProgress>=u.buildTask.buildNeeded){
-          u.buildTask.underConstruction=false;
-          const el2 = u.buildTask.marker.getElement(); if(el2){ const bb = el2.querySelector('.buildbar'); if(bb) bb.remove(); }
-          log(`${owner===player?'Bizim':'AI'} ${labelOf(u.job.type)} tamamlandı.`);
-          u.job = null; u.buildTask=null;
-          if(owner.queue && owner.queue.length>0){ u.job = owner.queue.shift(); u.dest = u.job.pos; }
-          updateQueueUI(); updateHUD();
-        }
+        if(!isLand(pos)){ hint('Bu yapı karada kurulmalı.'); return; }
       }
-    }
-  }
-
-  function moveUnit(dt, u){
-    if(!u.dest) return;
-    // Hedef ortam kontrolü
-    if(!canUnitGoTo(u, u.dest)){ u.dest = null; return; }
-    const step = u.speed * dt; 
-    const next = latlngTowards(u.pos, u.dest, step);
-    u.pos = next; u.marker.setLatLng(u.pos);
-    if(distance(u.pos, u.dest) < 4){ u.dest=null }
-  }
-
-  /* -------------------------- Combat & AI Targeting -------------------------- */
-  function tickCombat(dt, sideObj, enemySide){
-    const units = sideObj.units;
-    const enemies = enemySide.units.concat(enemySide.buildings);
-
-    for(const u of units){
-      moveUnit(dt, u);
-      if(u.dps>0){
-        if(sideObj===player && playerStance==='hold'){
-          // HOLD: ateş eder ama kovalamaz
-          if(u.target && inRange(u, u.target)) dealDamage(u, u.target, dt);
-          else {
-            const immediate = acquireTargetInRange(u, enemies);
-            if(immediate) { u.target = immediate; dealDamage(u, u.target, dt); }
-          }
-          continue; // default agresifi atla
-        }
-
-        // AGGRESSIVE (varsayılan) + AI
-        if(!u.target || u.target.dead){ u.target = acquireTarget(u, enemies); }
-        else if(distance(u.pos, u.target.pos) > (u.range*1.1)){ u.dest = u.target.pos; }
-        if(u.target && inRange(u, u.target)){
-          dealDamage(u, u.target, dt);
-        }
-      }
-    }
-  }
-
-  function acquireTarget(u, enemies){
-    let best=null, bestD=Infinity;
-    for(const e of enemies){ if(e.dead) continue; const d=distance(u.pos,e.pos); if(d<bestD){ best=e; bestD=d; } }
-    return best;
-  }
-  function acquireTargetInRange(u, enemies){
-    let best=null, bestD=Infinity; const R=u.range||0;
-    for(const e of enemies){ if(e.dead) continue; const d=distance(u.pos,e.pos); if(d<=R && d<bestD){ best=e; bestD=d; } }
-    return best;
-  }
-
-  /* -------------------------- AI -------------------------- */
-  function aiThink(dt, forceSeed=false){
-    ai.lastThink += dt;
-    if(forceSeed || ai.lastThink>5){
-      ai.lastThink=0;
-      const hasMill = ai.buildings.some(b=>b.buildingType==='mill');
-      const hasRef  = ai.buildings.some(b=>b.buildingType==='refinery');
-      const hasBarr = ai.buildings.some(b=>b.buildingType==='barracks');
-      const hasFac  = ai.buildings.some(b=>b.buildingType==='factory');
-      const hasPort = ai.buildings.some(b=>b.buildingType==='port');
-
-      if(!hasMill && ai.money>=COST.mill.money) { ai.money-=COST.mill.money; enqueueBuildJob(ai, {type:'mill', pos: offset(ai.base.pos, 1400) }); }
-      else if(!hasRef && ai.money>=COST.refinery.money) { ai.money-=COST.refinery.money; enqueueBuildJob(ai, {type:'refinery', pos: offset(ai.base.pos, 1600) }); }
-      else if(!hasBarr && ai.money>=COST.barracks.money) { ai.money-=COST.barracks.money; enqueueBuildJob(ai, {type:'barracks', pos: offset(ai.base.pos, 1200) }); }
-      else if(!hasFac && ai.money>=COST.factory.money && ai.oil>=COST.factory.oil) { ai.money-=COST.factory.money; ai.oil-=COST.factory.oil; enqueueBuildJob(ai, {type:'factory', pos: offset(ai.base.pos, 1800) }); }
-      else if(!hasPort && ai.money>=COST.port.money) { ai.money-=COST.port.money; enqueueBuildJob(ai, {type:'port', pos: offset(ai.base.pos, 2200) }); }
-
-      const aiBarr = ai.buildings.find(b=>b.buildingType==='barracks');
-      const aiFac  = ai.buildings.find(b=>b.buildingType==='factory');
-      const aiPort = ai.buildings.find(b=>b.buildingType==='port');
-
-      if(aiBarr && ai.money>=COST.soldier.money && Math.random()<.7){ ai.money-=COST.soldier.money; aiSpawnFromBuilding('soldier', aiBarr); }
-      if(aiFac && ai.money>=COST.tank.money && ai.oil>=COST.tank.oil && Math.random()<.5){ ai.money-=COST.tank.money; ai.oil-=COST.tank.oil; aiSpawnFromBuilding('tank', aiFac); }
-      if(aiPort && ai.money>=COST.ship.money && ai.oil>=COST.ship.oil && Math.random()<.3){ ai.money-=COST.ship.money; ai.oil-=COST.ship.oil; aiSpawnFromBuilding('ship', aiPort); }
-
-      // Basit saldırı
-      const army = ai.units.filter(u=>u.dps>0);
-      if(army.length>=6){ const t = acquireTarget({pos:ai.base.pos}, player.units.concat(player.buildings)); if(t){ army.forEach(u=>{ if(canUnitGoTo(u,t.pos)) u.dest=t.pos; }); log('AI saldırı başlattı!'); } }
-    }
-  }
-
-  function aiSpawnFromBuilding(kind, b){
-    const pos = findSpawnAround(b.pos, kind); if(!pos) return;
-    const u = new Unit({ side:Side.AI, pos, unitType: kind });
-    ai.units.push(u);
-  }
-
-  /* -------------------------- Game Loop with Speed -------------------------- */
-  let last = performance.now();
-  let gameSpeed = 1; setSpeed(1);
-  const FIXED_STEP = 0.02; // 50 sim steps per second
-  const MAX_STEPS = 300;   // güvenlik limiti (100x hızda da yeterli)
-  let accumulator = 0;
-
-  function step(dt){
-    // kepçe logic
-    player.units.filter(u=>u.unitType==='kepce').forEach(u=> tickKepce(dt, u, player));
-    ai.units.filter(u=>u.unitType==='kepce').forEach(u=> tickKepce(dt, u, ai));
-
-    // movement + combat
-    tickCombat(dt, player, ai);
-    tickCombat(dt, ai, player);
-
-    // economy + ai
-    incomeTick(dt);
-    aiThink(dt);
-  }
-
-  function loop(now){
-    const baseDt = Math.min(0.1, (now-last)/1000); // tab değişince dev adımları kıs
-    last = now;
-    accumulator += baseDt * gameSpeed;
-
-    let steps=0;
-    while(accumulator >= FIXED_STEP && steps < MAX_STEPS){
-      step(FIXED_STEP);
-      accumulator -= FIXED_STEP;
-      steps++;
+      const job={ type, pos };
+      enqueueBuildJob(player, job);
+      hint(labelOf(type)+' inşası: kepçe yolda.');
+      return;
     }
 
-    requestAnimationFrame(loop);
+    // WALL / GATE drawing
+    if(buildWallDraw.active){ addWallPoint(e.latlng); return; }
+    if(buildGateDraw.active){ addGatePoint(e.latlng); return; }
+
+    // MOVEMENT / A-Move
+    if(selection.size>0){
+      selection.forEach(ent=>{
+        if(!(ent instanceof Unit)) return;
+        if(attackMoveMode){ ent.dest = clampToMedium(ent, e.latlng); ent.target=null; ent.aMove=true; }
+        else { ent.dest = clampToMedium(ent, e.latlng); ent.target=null; ent.aMove=false; }
+      });
+      hint(attackMoveMode? 'A-Yürüyüş emri.':'Hareket emri.');
+    }
+  });
+  map.on('contextmenu', ()=>{ clearSelection(); hint('Seçim temizlendi.'); });
+
+  document.getElementById('wallMode').addEventListener('click', ()=> toggleWallDraw());
+  document.getElementById('gateMode').addEventListener('click', ()=> toggleGateDraw());
+
+  /* =========================
+     BUILD QUEUE
+  ========================= */
+  function enqueueBuildJob(sideObj, job){ const kepces=sideObj.units.filter(u=>u.unitType==='kepce'); const free=kepces.find(k=>!k.job); if(free){ free.job=job; free.dest=job.pos; updateQueueUI(); } else { (sideObj.queue ||= []).push(job); updateQueueUI(); } }
+  function updateQueueUI(){ queueEl.innerHTML=''; const list=(player.units.filter(u=>u.unitType==='kepce').map(k=> k.job? `⛏️ ${labelOf(k.job.type)} kuruluyor` : '⏳ Boş')).concat((player.queue||[]).map(j=>`🧱 Sırada: ${labelOf(j.type)}`)); list.forEach(t=>{ const li=document.createElement('li'); li.textContent=t; queueEl.appendChild(li) }); }
+  function labelOf(type){ const m={mill:'Değirmen', refinery:'Rafineri', port:'Liman', factory:'Tank Fabrikası', barracks:'Kışla', ship:'Gemi', soldier:'Asker', tank:'Tank', kepce:'Kepçe', wall:'Duvar', gate:'Kapı'}; return m[type]||type }
+
+  /* =========================
+     PRODUCTION PANEL
+  ========================= */
+  const buildBtns = document.querySelectorAll('[data-build]');
+  buildBtns.forEach(btn=> btn.addEventListener('click',()=>{ const type=btn.dataset.build; if(player.money < (COST[type].money||0) || player.oil < (COST[type].oil||0)) { hint('Yetersiz kaynak.'); return; } player.money -= (COST[type].money||0); player.oil -= (COST[type].oil||0); updateHUD(); buildMode=type; hint(`${labelOf(type)} için konum seçin.`); }));
+
+  function renderProductionPanel(){ const items=[...selection].filter(x=> x instanceof Building && x.side===Side.PLAYER); prodPanel.innerHTML=''; if(items.length!==1){ prodPanel.innerHTML='<div class="opacity-60">Bir bina seçin…</div>'; return; } const b=items[0]; const wrap=document.createElement('div'); function addBtn(title,sub,kind){ const btn=document.createElement('button'); btn.className='btn bg-white/5 hover:bg-white/10 w-full justify-between'; btn.innerHTML=`<span>${title}</span><span class="opacity-70 text-xs">${sub}</span>`; btn.onclick=()=> produceFromBuilding(b,kind); wrap.appendChild(btn);} if(b.isBase){ addBtn('⛏️ Kepçe', `(💰${COST.excavator.money}+🛢️${COST.excavator.oil})`, 'kepce'); } if(b.buildingType==='barracks'){ addBtn('🪖 Asker', `(💰${COST.soldier.money})`, 'soldier'); } if(b.buildingType==='factory'){ addBtn('🛡️ Tank', `(💰${COST.tank.money}+🛢️${COST.tank.oil})`, 'tank'); } if(b.buildingType==='port'){ addBtn('🚢 Gemi', `(💰${COST.ship.money}+🛢️${COST.ship.oil})`, 'ship'); } prodPanel.appendChild(wrap); }
+  function quickProduce(ent){ if(!(ent instanceof Building) || ent.side!==Side.PLAYER) return; if(ent.isBase) return produceFromBuilding(ent,'kepce'); if(ent.buildingType==='barracks') return produceFromBuilding(ent,'soldier'); if(ent.buildingType==='factory') return produceFromBuilding(ent,'tank'); if(ent.buildingType==='port') return produceFromBuilding(ent,'ship'); }
+  function produceFromBuilding(building, kind){ const need=COST[kind==='kepce'?'excavator':kind]; if(player.money < (need.money||0) || player.oil < (need.oil||0)) { hint('Yetersiz kaynak.'); return; } const wantLand=(kind!=='ship'); if(wantLand && !isLand(building.pos)){ hint('Kara birimi için kara üzerinde bina gerekli.'); return; } if(!wantLand && isLand(building.pos)){ if(!nearWater(building.pos,400)){ hint('Liman denize erişmeli.'); return; } }
+    player.money -= (need.money||0); player.oil -= (need.oil||0); updateHUD(); const pos = findSpawnAround(building.pos, kind); if(!pos){ hint('Çıkış noktası bulunamadı.'); return; } const u = new Unit({ side:Side.PLAYER, pos, unitType: kind }); player.units.push(u); hint(`${labelOf(kind)} üretildi.`); }
+  function findSpawnAround(origin, kind){ const wantLand=(kind!=='ship'); for(let r=30;r<=220;r+=20){ for(let k=0;k<14;k++){ const ang=Math.random()*Math.PI*2; const p=offsetDir(origin,r,ang); const land=isLand(p); if( (wantLand && land) || (!wantLand && !land) ) return p; } } if( (wantLand && isLand(origin)) || (!wantLand && !isLand(origin)) ) return origin; return null; }
+
+  function stopSelected(){ selection.forEach(ent=>{ if(ent instanceof Unit){ ent.dest=null; ent.target=null; ent.aMove=false; } }); hint('Seçili birimler durdu.'); }
+
+  /* =========================
+     WALLS & GATES
+  ========================= */
+  const walls=[]; // built segments
+  const pendingWalls=[]; // build jobs
+  const buildWallDraw = { active:false, points:[], temp:null };
+  const buildGateDraw = { active:false, points:[], temp:null };
+
+  function toggleWallDraw(){ buildMode=null; buildGateDraw.active=false; if(buildGateDraw.temp){ buildGateDraw.temp.remove(); buildGateDraw.temp=null; } buildWallDraw.active=!buildWallDraw.active; buildWallDraw.points=[]; if(buildWallDraw.temp){ buildWallDraw.temp.remove(); buildWallDraw.temp=null; } hint(buildWallDraw.active? 'Duvar çiz: noktaları ekle, çift tıkla bitir.' : 'Duvar modu kapalı.'); }
+  function toggleGateDraw(){ buildMode=null; buildWallDraw.active=false; if(buildWallDraw.temp){ buildWallDraw.temp.remove(); buildWallDraw.temp=null; } buildGateDraw.active=!buildGateDraw.active; buildGateDraw.points=[]; if(buildGateDraw.temp){ buildGateDraw.temp.remove(); buildGateDraw.temp=null; } hint(buildGateDraw.active? 'Kapı çiz: noktaları ekle, çift tıkla bitir.' : 'Kapı modu kapalı.'); }
+
+  function addWallPoint(ll){ if(!buildWallDraw.active) return; if(!isLand(ll)){ hint('Duvar yalnızca karada.'); return; } buildWallDraw.points.push(ll); if(buildWallDraw.temp) buildWallDraw.temp.setLatLngs(buildWallDraw.points); else buildWallDraw.temp=L.polyline(buildWallDraw.points,{color:'#fbbf24',weight:4,dashArray:'6 6'}).addTo(map); }
+  function addGatePoint(ll){ if(!buildGateDraw.active) return; if(!isLand(ll)){ hint('Kapı yalnızca karada.'); return; } buildGateDraw.points.push(ll); if(buildGateDraw.temp) buildGateDraw.temp.setLatLngs(buildGateDraw.points); else buildGateDraw.temp=L.polyline(buildGateDraw.points,{color:'#2dd4bf',weight:4,dashArray:'6 6'}).addTo(map); }
+
+  map.on('dblclick', ()=>{ if(buildWallDraw.active) finalizeWall(false); else if(buildGateDraw.active) finalizeWall(true); });
+
+  function finalizeWall(asGate){ const buf = asGate? buildGateDraw : buildWallDraw; const pts=buf.points.slice(); if(pts.length<2){ hint((asGate?'Kapı':'Duvar')+': en az iki nokta.'); return; } const totalLen=polylineLen(pts); const mCost = Math.ceil((totalLen/100)*WALL.moneyPer100m); const oCost = Math.ceil((totalLen/100)*WALL.oilPer100m); if(player.money<mCost || player.oil<oCost){ hint(`Yetersiz kaynak. Gerekli: 💰${mCost}, 🛢️${oCost}`); return; } player.money-=mCost; player.oil-=oCost; updateHUD(); const segs = segmentize(pts, WALL.segLen); segs.forEach(([a,b])=>{ const seg = new WallSegment({ side:Side.PLAYER, latlngs:[a,b], gate:asGate }); pendingWalls.push(seg); }); assignKepceJobsForWalls(); if(buf.temp){ buf.temp.remove(); buf.temp=null; } buf.active=false; buf.points=[]; hint((asGate?'Kapı':'Duvar')+' işleri kuyruğa eklendi.'); }
+  function polylineLen(pts){ let s=0; for(let i=1;i<pts.length;i++) s+=distance(pts[i-1],pts[i]); return s; }
+  function segmentize(pts, segLen){ const out=[]; for(let i=1;i<pts.length;i++){ const a=pts[i-1], b=pts[i]; const len=distance(a,b); if(len<=segLen){ out.push([a,b]); continue; } const n=Math.ceil(len/segLen); for(let k=0;k<n;k++){ const p=latlngTowards(a,b,(k*segLen)); const q=latlngTowards(a,b,(Math.min((k+1)*segLen,len))); out.push([p,q]); } } return out; }
+  function assignKepceJobsForWalls(){ const kepces=player.units.filter(u=>u.unitType==='kepce'); for(const k of kepces){ if(!k.job && pendingWalls.length){ const seg=pendingWalls.shift(); k.job={ type:'wall', seg }; k.dest=seg.latlngs[0]; updateQueueUI(); } } }
+  function selectWall(seg){ clearSelection(); selection.add(seg); hint(seg.gate? 'Seçili: Kapı' : 'Seçili: Duvar'); }
+
+  function segmentsIntersect(p1,p2,q1,q2){ function ccw(a,b,c){ return (c.y-a.y)*(b.x-a.x) > (b.y-a.y)*(c.x-a.x); } return (ccw(p1,q1,q2) != ccw(p2,q1,q2)) && (ccw(p1,p2,q1) != ccw(p1,p2,q2)); }
+
+  /* =========================
+     ECONOMY
+  ========================= */
+  let incomeTimer=0; function incomeTick(dt){ incomeTimer += dt; if(incomeTimer < RATES.tickSec) return; incomeTimer=0; const mills=player.buildings.filter(b=>b.buildingType==='mill').length; const refs=player.buildings.filter(b=>b.buildingType==='refinery').length; const ports=player.ports(); player.money += mills * RATES.moneyPerMill * (1 + ports*RATES.portBonus); player.oil += refs * RATES.oilPerRef; const amills=ai.buildings.filter(b=>b.buildingType==='mill').length; const arefs=ai.buildings.filter(b=>b.buildingType==='refinery').length; const aports=ai.buildings.filter(b=>b.buildingType==='port').length; ai.money += amills * RATES.moneyPerMill * (1 + aports*RATES.portBonus); ai.oil += arefs * RATES.oilPerRef; updateHUD(); }
+
+  /* =========================
+     COMBAT
+  ========================= */
+  function inRange(u,v){ return distance(u.pos, v.pos) <= (u.range||0) }
+  function dealDamage(attacker, target, dt){ if(attacker.dps<=0) return; target.hp -= attacker.dps * dt; if(target.buildingType==='wall'){ updateWallStyle(target); } else { updateHPBar(target); } if(target.hp<=0) destroyEntity(target, attacker); if(Math.random()<.25) drawBeam(attacker.pos, (target.pos|| midPoint(target))); }
+  function midPoint(seg){ if(seg.latlngs){ return L.latLng((seg.latlngs[0].lat+seg.latlngs[1].lat)/2, (seg.latlngs[0].lng+seg.latlngs[1].lng)/2); } return seg.pos; }
+  function updateHPBar(ent){ const el=ent.marker?.getElement?.(); if(!el) return; const fill=el.querySelector('.hpfill'); if(!fill) return; const maxHP = ent.unitType? STATS[ent.unitType].hp : STATS[ent.buildingType].hp; const pct=Math.max(0,Math.min(100,(ent.hp/maxHP)*100)); fill.style.width=pct+'%'; fill.style.background = pct<33? 'linear-gradient(90deg,#ef4444,#dc2626)': pct<66? 'linear-gradient(90deg,#f59e0b,#d97706)': 'linear-gradient(90deg,#22c55e,#16a34a)'; }
+  function updateWallStyle(seg){ const ratio=Math.max(0, seg.hp/WALL.hp); const color = seg.gate? '#14b8a6' : (ratio<0.33? '#ef4444' : ratio<0.66? '#f59e0b' : '#93c5fd'); seg.poly.setStyle({ color, weight:5, opacity:0.9, dashArray: seg.gate? '1 12' : null }); }
+  function drawBeam(a,b){ if(!svg) return; const p1=map.latLngToLayerPoint(a), p2=map.latLngToLayerPoint(b); const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',p1.x); line.setAttribute('y1',p1.y); line.setAttribute('x2',p2.x); line.setAttribute('y2',p2.y); line.setAttribute('class','beam'); svg.appendChild(line); setTimeout(()=> line.remove(), 160); }
+
+  function destroyEntity(ent,killer){ ent.dead=true; if(ent.marker){ ent.marker.remove(); } if(ent.poly){ ent.poly.remove(); }
+    if(ent.unitType){ const arr=ent.side===Side.PLAYER? player.units : ai.units; const i=arr.indexOf(ent); if(i>=0) arr.splice(i,1);
+    } else if(ent.buildingType==='wall'){ const i=walls.indexOf(ent); if(i>=0) walls.splice(i,1);
+    } else { const arr=ent.side===Side.PLAYER? player.buildings : ai.buildings; const i=arr.indexOf(ent); if(i>=0) arr.splice(i,1); if(ent.isBase){ if(ent.side===Side.PLAYER) endGame(false); else endGame(true); } }
+    if(selection.has(ent)) selection.delete(ent); if(killer) log(`${killer.side==='player'?'Bizim':'AI'} ${killer.unitType||killer.buildingType} birimi ${ent.unitType||ent.buildingType} yok etti.`); updateHUD(); renderProductionPanel(); }
+
+  function endGame(win){ const modal=document.getElementById('helpModal'); const box=modal.querySelector('.glass'); modal.classList.add('show'); box.querySelector('.text-lg').textContent = win? 'Zafer!' : 'Yenilgi!'; box.querySelector('ul').innerHTML = `<li>${win? 'AI üssünü yok ettiniz.' : 'Üssünüz yok edildi.'}</li>`; }
+
+  /* =========================
+     INIT
+  ========================= */
+  function initGame(){ const city=choose(LAND_SEEDS); const center=L.latLng(city[0],city[1]); const angle=Math.random()*Math.PI*2; const pPos=offsetDir(center, START.PLAYER_RADIUS, angle); const aPos=offsetDir(center, START.AI_RADIUS, angle+START.SEPARATION_DEG); const pBase=new Building({ side:Side.PLAYER, pos:pPos, buildingType:'base', isBase:true }); const aBase=new Building({ side:Side.AI, pos:aPos, buildingType:'base', isBase:true }); player.base=pBase; ai.base=aBase; player.buildings.push(pBase); ai.buildings.push(aBase); const pKep=new Unit({ side:Side.PLAYER, pos:offset(pBase.pos, 120), unitType:'kepce' }); player.units.push(pKep); const aKep=new Unit({ side:Side.AI, pos:offset(aBase.pos, 120), unitType:'kepce' }); ai.units.push(aKep); map.setView(center, START.CITY_ZOOM); updateHUD(); updateQueueUI(); hint('Gelişmiş: liman sahile snap, daire seçim, A-yürüyüş, kapı/duvar.'); aiThink(0,true); }
+
+  /* =========================
+     KEPÇE & BUILD FLOW
+  ========================= */
+  function tickKepce(dt, u, owner){ moveUnit(dt,u); if(u.job && u.dest==null){ if(u.job.type==='wall'){ const seg=u.job.seg; if(seg.underConstruction){ seg.buildProgress += dt; const ratio=Math.min(1, seg.buildProgress/seg.buildNeeded); seg.poly.setStyle(gateStyle(seg, ratio>=1)); if(ratio>=1){ seg.underConstruction=false; walls.push(seg); u.job=null; assignKepceJobsForWalls(); updateQueueUI(); } } }
+      else if(!u.buildTask){ const type=u.job.type; const b=new Building({ side:u.side, pos:u.job.pos, buildingType:type }); b.buildProgress=0; b.buildNeeded=COST[type].build; b.underConstruction=true; b.marker.getElement().querySelector('.hpbar').insertAdjacentHTML('beforebegin','<div class="buildbar"><div class="buildfill" style="width:0%"></div></div>'); u.buildTask=b; (owner.buildings).push(b); }
+      else { u.buildTask.buildProgress += dt; const pct=Math.min(100,(u.buildTask.buildProgress/u.buildTask.buildNeeded)*100); const el=u.buildTask.marker.getElement(); if(el){ const f=el.querySelector('.buildfill'); if(f) f.style.width=pct+'%'; } if(u.buildTask.buildProgress>=u.buildTask.buildNeeded){ u.buildTask.underConstruction=false; const el2=u.buildTask.marker.getElement(); if(el2){ const bb=el2.querySelector('.buildbar'); if(bb) bb.remove(); } log(`${owner===player?'Bizim':'AI'} ${labelOf(u.job.type)} tamamlandı.`); u.job=null; u.buildTask=null; if(owner.queue && owner.queue.length>0){ u.job=owner.queue.shift(); u.dest=u.job.pos; } updateQueueUI(); updateHUD(); } }
+    } }
+
+  function moveUnit(dt,u){ if(!u.dest) return; const to = clampToMedium(u,u.dest); if(to!==u.dest) u.dest=to; const step=u.speed*dt; const next=latlngTowards(u.pos,u.dest,step); // duvar engeli kontrolü & kapı
+    const p1=map.latLngToLayerPoint(u.pos), p2=map.latLngToLayerPoint(next);
+    for(const w of walls){ const q1=map.latLngToLayerPoint(w.latlngs[0]), q2=map.latLngToLayerPoint(w.latlngs[1]);
+      const gatePass = w.gate && w.side===u.side; // dost kapıdan geçebilir
+      if(!gatePass && segmentsIntersect(p1,p2,q1,q2)){ u.dest=null; break; }
+    }
+    if(!u.dest) return; u.pos=next; u.marker.setLatLng(u.pos); if(distance(u.pos,u.dest)<4){ u.dest=null } }
+
+  /* =========================
+     COMBAT LOOP & AI
+  ========================= */
+  function tickCombat(dt, sideObj, enemySide){ const units=sideObj.units; const enemies=enemySide.units.concat(enemySide.buildings, walls.filter(w=>w.side!==sideObj.side)); for(const u of units){ moveUnit(dt,u); if(u.dps>0){ if(sideObj===player && playerStance==='hold' && !u.aMove){ if(u.target && inRange(u,u.target)) dealDamage(u,u.target,dt); else { const immediate=acquireTargetInRange(u,enemies); if(immediate){ u.target=immediate; dealDamage(u,u.target,dt); } } continue; } if(!u.target || u.target.dead){ u.target=acquireTarget(u,enemies); } else if(distance(u.pos,u.target.pos||midPoint(u.target))>(u.range*1.1)){ const clamped=clampToMedium(u,u.target.pos||midPoint(u.target)); u.dest=clamped; } if(u.target){ const tpos=(u.target.pos||midPoint(u.target)); if(inRange(u,{pos:tpos})) dealDamage(u,u.target,dt); } } } }
+  function acquireTarget(u,enemies){ let best=null, bestD=Infinity; for(const e of enemies){ if(e.dead) continue; const p = e.pos || midPoint(e); const d=distance(u.pos,p); if(d<bestD){ best=e; bestD=d; } } return best; }
+  function acquireTargetInRange(u,enemies){ let best=null,bestD=Infinity; const R=u.range||0; for(const e of enemies){ if(e.dead) continue; const p=e.pos || midPoint(e); const d=distance(u.pos,p); if(d<=R && d<bestD){ best=e; bestD=d; } } return best; }
+
+  function aiThink(dt,forceSeed=false){ ai.lastThink += dt; if(forceSeed || ai.lastThink>5){ ai.lastThink=0; const hasMill=ai.buildings.some(b=>b.buildingType==='mill'); const hasRef=ai.buildings.some(b=>b.buildingType==='refinery'); const hasBarr=ai.buildings.some(b=>b.buildingType==='barracks'); const hasFac=ai.buildings.some(b=>b.buildingType==='factory'); const hasPort=ai.buildings.some(b=>b.buildingType==='port'); if(!hasMill && ai.money>=COST.mill.money){ ai.money-=COST.mill.money; enqueueBuildJob(ai,{type:'mill',pos:offset(ai.base.pos,1600)}); } else if(!hasRef && ai.money>=COST.refinery.money){ ai.money-=COST.refinery.money; enqueueBuildJob(ai,{type:'refinery',pos:offset(ai.base.pos,1800)}); } else if(!hasBarr && ai.money>=COST.barracks.money){ ai.money-=COST.barracks.money; enqueueBuildJob(ai,{type:'barracks',pos:offset(ai.base.pos,1200)}); } else if(!hasFac && ai.money>=COST.factory.money && ai.oil>=COST.factory.oil){ ai.money-=COST.factory.money; ai.oil-=COST.factory.oil; enqueueBuildJob(ai,{type:'factory',pos:offset(ai.base.pos,2000)}); } else if(!hasPort && ai.money>=COST.port.money){ ai.money-=COST.port.money; const pos = snapToCoast(offset(ai.base.pos,2200)) || offset(ai.base.pos,2200); enqueueBuildJob(ai,{type:'port',pos}); }
+    const aiBarr=ai.buildings.find(b=>b.buildingType==='barracks'); const aiFac=ai.buildings.find(b=>b.buildingType==='factory'); const aiPort=ai.buildings.find(b=>b.buildingType==='port'); if(aiBarr && ai.money>=COST.soldier.money && Math.random()<.7){ ai.money-=COST.soldier.money; aiSpawnFromBuilding('soldier', aiBarr); } if(aiFac && ai.money>=COST.tank.money && ai.oil>=COST.tank.oil && Math.random()<.5){ ai.money-=COST.tank.money; ai.oil-=COST.tank.oil; aiSpawnFromBuilding('tank', aiFac); } if(aiPort && ai.money>=COST.ship.money && ai.oil>=COST.ship.oil && Math.random()<.3){ ai.money-=COST.ship.money; ai.oil-=COST.ship.oil; aiSpawnFromBuilding('ship', aiPort); }
+    const army=ai.units.filter(u=>u.dps>0); if(army.length>=6){ const t=acquireTarget({pos:ai.base.pos}, player.units.concat(player.buildings,walls.filter(w=>w.side===Side.PLAYER))); if(t){ army.forEach(u=>{ const clamped=clampToMedium(u,t.pos||midPoint(t)); u.dest=clamped; }); log('AI saldırı başlattı!'); } } } }
+  function aiSpawnFromBuilding(kind,b){ const pos=findSpawnAround(b.pos,kind); if(!pos) return; const u=new Unit({ side:Side.AI, pos, unitType:kind }); ai.units.push(u); }
+
+  /* =========================
+     GAME LOOP
+  ========================= */
+  let last=performance.now(); let gameSpeed=1; setSpeed(1); const FIXED_STEP=0.02; const MAX_STEPS=300; let accumulator=0; function step(dt){ player.units.filter(u=>u.unitType==='kepce').forEach(u=> tickKepce(dt,u,player)); ai.units.filter(u=>u.unitType==='kepce').forEach(u=> tickKepce(dt,u,ai)); tickCombat(dt,player,ai); tickCombat(dt,ai,player); incomeTick(dt); aiThink(dt); assignKepceJobsForWalls(); }
+  function loop(now){ const baseDt=Math.min(0.1,(now-last)/1000); last=now; accumulator += baseDt * gameSpeed; let steps=0; while(accumulator>=FIXED_STEP && steps<MAX_STEPS){ step(FIXED_STEP); accumulator -= FIXED_STEP; steps++; } requestAnimationFrame(loop); }
+
+  /* =========================
+     TESTS
+  ========================= */
+  function runSelfTests(){ try{ console.assert(svg instanceof SVGSVGElement,'SVG ready'); drawBeam(map.getCenter(), map.getCenter()); log('🧪 SVG/beam ✅'); }catch(e){ log('🧪 SVG/beam ❌ '+e.message); }
+    try{ const land=L.latLng(41,29), sea=L.latLng(0,-30); console.assert(isLand(land),'Istanbul kara'); console.assert(!isLand(sea),'Atlantik su'); const snap=snapToCoast(L.latLng(41.02,29.0),800); console.assert(!snap || isLand(snap),'Snap karada olmalı'); log('🧪 Kara/Su + Snap ✅'); }catch(e){ log('🧪 Kara/Su + Snap ❌ '+e.message); }
+    try{ const a=L.point(0,0), b=L.point(10,10), c=L.point(0,10), d=L.point(10,0); console.assert(segmentsIntersect(a,b,c,d),'Segment kesişim'); log('🧪 Duvar/çarpışma ✅'); }catch(e){ log('🧪 Duvar/çarpışma ❌ '+e.message); }
   }
 
-  /* -------------------------- Self Tests (runtime) -------------------------- */
-  function runSelfTests(){
-    try {
-      console.assert(svg instanceof SVGSVGElement, 'SVG container is ready');
-      drawBeam(map.getCenter(), map.getCenter());
-      log('🧪 Test: SVG/beam oluşturma ✅');
-    } catch(e){ log('🧪 Test: SVG/beam oluşturma ❌ ' + e.message); console.error(e); }
-
-    try {
-      const prev = gameSpeed; setSpeed(10); console.assert(gameSpeed===10, 'Speed set to 10'); setSpeed(prev);
-      log('🧪 Test: Hız kontrol ✅');
-    } catch(e){ log('🧪 Test: Hız kontrol ❌ ' + e.message); console.error(e); }
-
-    try {
-      // Kara birimi suya gidememeli
-      const s = new Unit({ side:Side.PLAYER, pos:L.latLng(41,29), unitType:'soldier' });
-      player.units.push(s);
-      const ocean = L.latLng(0,-30); // Atlantik ortası
-      const ok = canUnitGoTo(s, ocean);
-      console.assert(!ok, 'Kara birimi okyanusa gitmemeli');
-      s.marker.remove(); player.units.pop();
-      log('🧪 Test: Kara/Su kısıtı ✅');
-    } catch(e){ log('🧪 Test: Kara/Su kısıtı ❌ ' + e.message); console.error(e); }
-
-    try {
-      const d = distance(player.base.pos, ai.base.pos);
-      console.assert(d > 3000 && d < 12000, 'Üsler aynı şehir içinde ama daha uzak (3–12km)');
-      log('🧪 Test: Başlangıç mesafesi ✅ ('+Math.round(d)+'m)');
-    } catch(e){ log('🧪 Test: Başlangıç mesafesi ❌ ' + e.message); console.error(e); }
-  }
-
-  /* -------------------------- Start -------------------------- */
-  initGame();
-  requestAnimationFrame(loop);
+  /* =========================
+     START
+  ========================= */
+  initGame(); requestAnimationFrame(loop);
 
 })();
 </script>
