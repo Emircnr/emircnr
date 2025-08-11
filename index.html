@@ -3,681 +3,665 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>GLOBAL RTS — Natural Earth Land + Mouse-Only Control</title>
-
-<!-- Libs -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
-<script src="https://unpkg.com/topojson-client@3"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet"/>
-
+<title>RTS — Modern Combined Arms (Canvas)</title>
 <style>
-  :root{ --bg:#0b1220; --panel:#111A2B; --text:#E6EDF6; --c1:#34d399; --c2:#60a5fa; --warn:#f59e0b; --bad:#ef4444 }
-  html,body{height:100%; background:var(--bg); color:var(--text); font-family:'Montserrat',system-ui,Segoe UI,Roboto,Arial}
-  #app{height:100%; display:grid; grid-template-rows:auto 1fr auto}
-  #map{height:100%; width:100%}
-  .glass{backdrop-filter:blur(10px); background:linear-gradient(180deg, rgba(17,26,43,.82), rgba(11,18,32,.82)); border:1px solid rgba(255,255,255,.06); box-shadow:0 10px 30px rgba(0,0,0,.35)}
-  .btn{display:inline-flex; align-items:center; gap:.5rem; padding:.5rem .8rem; border-radius:.75rem; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.06)}
-  .btn[disabled]{opacity:.5; pointer-events:none}
-  .unit,.building{position:relative; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; border-radius:999px; border:2px solid rgba(0,0,0,.3); box-shadow:0 8px 20px rgba(0,0,0,.35)}
-  .unit{width:22px; height:22px; font-size:12px} .building{width:28px; height:28px; font-size:14px}
-  .player{background: radial-gradient(circle at 30% 30%, #10b981 10%, #059669 80%)} .ai{background: radial-gradient(circle at 30% 30%, #60a5fa 10%, #2563eb 80%)}
-  .kepce::after{content:"⛏️"} .soldier::after{content:"🪖"} .tank::after{content:"🛡️"} .ship::after{content:"🚢"}
-  .base::after{content:"🏰"} .mill::after{content:"🌾"} .refinery::after{content:"🛢️"} .port::after{content:"⚓"} .factory::after{content:"🏭"} .barracks::after{content:"🎖️"}
-  .sel{outline:3px solid rgba(255,255,255,.7); outline-offset:2px; animation:pulse 1.2s ease-in-out infinite}
-  @keyframes pulse{0%{outline-color:rgba(255,255,255,.7)}50%{outline-color:rgba(255,255,255,.2)}100%{outline-color:rgba(255,255,255,.7)}}
-  .select-box{position:absolute; border:1px dashed #93c5fd; background:rgba(59,130,246,.15); pointer-events:none; z-index:6000}
-  .hpbar{position:absolute; bottom:-4px; left:50%; width:44px; height:3px; background:rgba(255,255,255,.15); border-radius:999px; overflow:hidden; transform:translateX(-50%)}
-  .hpfill{height:100%; background:linear-gradient(90deg,#22c55e,#16a34a)}
-  .buildbar{position:absolute; top:-6px; left:50%; width:44px; height:4px; background:rgba(255,255,255,.1); border-radius:999px; overflow:hidden; transform:translateX(-50%)}
-  .buildfill{height:100%; background:linear-gradient(90deg,#f59e0b,#fde047)}
-  .beam{stroke:#fef08a; stroke-width:2; stroke-linecap:round; filter:drop-shadow(0 0 6px rgba(250,204,21,.9)); opacity:.95; pointer-events:none}
-  .leaflet-container{background:#0b1220}
-  .pill{display:inline-flex; align-items:center; gap:.4rem; padding:.25rem .55rem; border-radius:.75rem; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08)}
+  :root{ --bg:#0b1220; --panel:#111A2B; --text:#E6EDF6; --accent:#34d399; --blue:#60a5fa; --warn:#f59e0b; --bad:#ef4444 }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
+  #app{height:100%;display:grid;grid-template-rows:auto 1fr auto}
+  header,footer{background:linear-gradient(180deg,rgba(17,26,43,.85),rgba(11,18,32,.85));border-bottom:1px solid rgba(255,255,255,.06);backdrop-filter:blur(10px)}
+  header{position:sticky;top:0;z-index:10}
+  .wrap{max-width:1200px;margin:0 auto;padding:.6rem 1rem;display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+  .hud{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:.35rem;padding:.25rem .55rem;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-size:12px}
+  .btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--text);border-radius:10px;padding:.45rem .7rem;cursor:pointer}
+  .panel{position:absolute;z-index:5;background:linear-gradient(180deg,rgba(17,26,43,.85),rgba(11,18,32,.85));border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px}
+  .left{left:10px;top:10px;width:340px} .right{right:10px;top:10px;width:360px}
+  #game{display:block;width:100%;height:100%;background:
+    radial-gradient(800px 600px at 30% 20%, rgba(99,102,241,.06), transparent 70%),
+    radial-gradient(900px 700px at 70% 70%, rgba(34,197,94,.06), transparent 72%),
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255,255,255,.03) 1px, transparent 1px);
+    background-size:cover,cover, 40px 40px, 40px 40px;
+  }
+  #hint{position:absolute;left:50%;transform:translateX(-50%);bottom:14px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);padding:.4rem .7rem;border-radius:10px;z-index:6;font-size:13px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .small{font-size:12px;opacity:.8}
+  .list{font-size:12px;max-height:180px;overflow:auto;line-height:1.6}
+  .kps{width:120px}
 </style>
 </head>
 <body>
 <div id="app">
-  <!-- TOPBAR -->
-  <header class="glass sticky top-0 z-[5000]">
-    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
-      <div class="text-xl font-extrabold tracking-wide">GLOBAL <span class="text-emerald-400">RTS</span></div>
-      <div class="flex flex-wrap gap-2 items-center">
-        <div class="glass rounded-xl px-3 py-2 text-sm flex items-center gap-3">
-          <span class="pill">💰 <b id="money">0</b></span>
-          <span class="pill">🛢️ <b id="oil">0</b></span>
-          <span class="pill">🔧 <b id="excCount">0</b></span>
-          <span class="pill">🪖 <b id="soldierCount">0</b></span>
-          <span class="pill">🛡️ <b id="tankCount">0</b></span>
-          <span class="pill">🚢 <b id="shipCount">0</b></span>
+  <header>
+    <div class="wrap">
+      <div><b>GLOBAL RTS</b> — Modern Combined Arms</div>
+      <div class="hud">
+        <span class="pill">🍞 <b id="food">0</b></span>
+        <span class="pill">🛢️ <b id="oil">0</b></span>
+        <span class="pill">⛓️ <b id="iron">0</b></span>
+        <span class="pill">🪖 <b id="uInf">0</b></span>
+        <span class="pill">🚛 <b id="uAPC">0</b></span>
+        <span class="pill">🛡️ <b id="uTank">0</b></span>
+        <span class="pill">🎯 <b id="uHIMARS">0</b></span>
+        <span class="pill">🛩️ <b id="uFighter">0</b></span>
+        <span class="pill">🛫 <b id="uBomber">0</b></span>
+        <div class="pill" style="gap:.5rem">
+          ⏩ <input id="speed" type="range" min="1" max="100" value="1" class="kps">
+          <b id="spdLbl">1x</b>
+          <button class="btn" data-s="1">1x</button><button class="btn" data-s="5">5x</button><button class="btn" data-s="10">10x</button><button class="btn" data-s="50">50x</button><button class="btn" data-s="100">100x</button>
         </div>
-        <div class="glass rounded-xl px-3 py-2 text-xs flex items-center gap-2">
-          <span>⏩ Hız</span>
-          <input id="speedRange" type="range" min="1" max="100" value="1" class="w-32">
-          <span id="speedLbl" class="font-bold">1x</span>
-          <button class="btn" data-speed="1">1x</button><button class="btn" data-speed="5">5x</button><button class="btn" data-speed="10">10x</button><button class="btn" data-speed="50">50x</button><button class="btn" data-speed="100">100x</button>
-        </div>
-        <div class="glass rounded-xl px-3 py-2 text-xs flex items-center gap-2">
-          <span>🎯 Davranış:</span><button id="stanceBtn" class="btn">Agresif</button>
-          <span>🧭 Dizilim:</span>
-          <select id="formationSel" class="text-xs bg-transparent border rounded px-2 py-1">
-            <option value="auto">Otomatik</option>
-            <option value="line">Çizgi</option>
-            <option value="box">Kutu</option>
-            <option value="wedge">Kama</option>
-          </select>
-        </div>
-        <button id="stopBtn" class="btn">⏹ Durdur</button>
-        <button id="toggleLand" class="btn">🗺️ Kara Katmanını Aç/Kapat</button>
         <button id="newGame" class="btn">↻ Yeni Oyun</button>
-        <button id="helpBtn" class="btn">❔ Yardım</button>
+        <button id="help" class="btn">❔ Yardım</button>
       </div>
     </div>
   </header>
 
-  <!-- MAP -->
-  <main class="relative">
-    <div id="map"></div>
-
-    <!-- LEFT PANEL -->
-    <div class="glass rounded-2xl p-3 absolute left-3 top-3 z-[5000] w-[330px]">
-      <div class="text-sm font-bold uppercase tracking-wide mb-2 opacity-70">İnşa Et</div>
-      <div class="grid grid-cols-2 gap-2 mb-3">
-        <button class="btn" data-build="mill">🌾 Değirmen (💰100)</button>
-        <button class="btn" data-build="refinery">🛢️ Rafineri (💰50)</button>
-        <button class="btn" data-build="port">⚓ Liman (💰200)</button>
-        <button class="btn" data-build="barracks">🎖️ Kışla (💰100)</button>
-        <button class="btn col-span-2" data-build="factory">🏭 Tank Fabrikası (💰150 + 🛢️50)</button>
+  <main style="position:relative">
+    <canvas id="game"></canvas>
+    <div class="panel left">
+      <div style="font-weight:700;opacity:.8;margin-bottom:6px">İnşa Et</div>
+      <div class="grid2" id="buildBtns">
+        <!-- doldurulacak -->
       </div>
-
-      <div class="text-sm font-bold uppercase tracking-wide mb-2 opacity-70">Üret (Seçili Bina)</div>
-      <div id="prodPanel" class="grid grid-cols-1 gap-2 text-sm"><div class="opacity-60">Bir bina seçin…</div></div>
-
-      <div class="mt-3 text-xs opacity-70 space-y-1">
-        <div><b>Seçim</b>: Sol tık • <b>Kare seçim</b>: Sol tuşu basılı sürükle</div>
+      <div style="font-weight:700;opacity:.8;margin:10px 0 6px">Üret (Seçili Bina)</div>
+      <div id="prod" class="grid2 small"><div style="opacity:.7">Bir bina seçin…</div></div>
+      <div style="margin-top:8px" class="small">
+        <div><b>Seçim</b>: Sol tık • <b>Kare seçim</b>: Sol sürükle</div>
         <div><b>Hareket</b>: Sağ tık zemin • <b>Saldır</b>: Sağ tık düşman</div>
-        <div><b>Dizilim</b>: Üst bardan seç, sağ tıkla hedef ver</div>
-        <div><b>İnşa</b>: Türü seç → tıkla; liman kıyıya, diğerleri karaya <b>otomatik snap</b></div>
       </div>
     </div>
 
-    <!-- RIGHT PANEL -->
-    <div class="glass rounded-2xl p-3 absolute right-3 top-3 z-[5000] w-[360px]">
-      <div class="text-sm font-bold uppercase tracking-wide mb-2 opacity-70">Kepçe Görev Kuyruğu</div>
-      <ul id="queue" class="space-y-1 text-sm"></ul>
-      <div class="mt-3 text-sm font-bold uppercase tracking-wide mb-2 opacity-70">Savaş Günlüğü</div>
-      <div id="log" class="text-xs max-h-48 overflow-auto leading-relaxed pr-1"></div>
+    <div class="panel right">
+      <div style="font-weight:700;opacity:.8;margin-bottom:6px">Günlük</div>
+      <div id="log" class="list"></div>
     </div>
 
-    <div id="hint" class="glass rounded-xl px-3 py-2 text-sm absolute left-1/2 -translate-x-1/2 bottom-4 z-[5000]">Kara katmanı yükleniyor…</div>
+    <div id="hint">Yükleniyor…</div>
   </main>
 
-  <footer class="glass w-full text-center text-xs py-2 opacity-70">Made with ❤️ — Natural Earth Land + Mouse-only RTS</footer>
+  <footer>
+    <div class="wrap" style="justify-content:center;font-size:12px;opacity:.8">Mouse-only • Kare seçim • Otomatik saldırı • Gerçek isimli üniteler • 1–100x hız</div>
+  </footer>
 </div>
 
-<!-- HELP MODAL -->
-<div id="helpModal" class="modal" style="position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.5);z-index:9999">
-  <div class="glass rounded-2xl p-6 max-w-xl text-sm">
-    <div class="text-lg font-bold mb-2">Nasıl Oynanır?</div>
-    <ul class="list-disc pl-5 space-y-2">
-      <li>Sol tık: seç • Sol sürükle: kare seç • Sağ tık (zemin): hareket • Sağ tık (düşman): saldır</li>
-      <li>Dizilim: Çizgi/Kutu/Kama — hedefe göre otomatik yerleştirme</li>
-      <li>Menzil halkası: birime tıkla; saldırı menzili görünür</li>
-      <li>İnşa: liman kıyıya, diğer binalar karaya otomatik snap</li>
-      <li>Kara/deniz ayrımı Natural Earth poligonlarıyla yapılır, şeffaf katman görünür</li>
+<!-- Yardım Modal -->
+<div id="modal" style="position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.5);z-index:9999">
+  <div style="background:#0f172a;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px;max-width:720px;font-size:14px">
+    <div style="font-weight:700;margin-bottom:8px">Nasıl Oynanır?</div>
+    <ul style="margin:0;padding-left:18px;line-height:1.7">
+      <li>Soldan bina seç, haritaya tıkla: 10 sn’de kurulur (kışla/değirmen/rafineri/maden/fabrikalar).</li>
+      <li>Bir bina seçince sağ panelde uygun birimler çıkar (maliyet yazar). Tıkla → üret.</li>
+      <li>Sol tık seç, sürükle → kare seçim. Sağ tık zemin → hareket. Sağ tık düşman → saldır.</li>
+      <li>Seçili birimde menzil halkası görünür; menzile giren düşmana otomatik ateş eder.</li>
+      <li>Hız kaydırıcısı: 1–100x.</li>
     </ul>
-    <div class="mt-4 text-right"><button class="btn" onclick="document.getElementById('helpModal').style.display='none'">Kapat</button></div>
+    <div style="text-align:right;margin-top:10px"><button class="btn" onclick="document.getElementById('modal').style.display='none'">Kapat</button></div>
   </div>
 </div>
 
 <script>
 (()=>{
-// ========== MAP ==========
-const map = L.map('map', { zoomControl:true, worldCopyJump:true, minZoom:2, maxZoom:19 });
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  attribution:'Tiles © Esri — Maxar', maxZoom:19
-}).addTo(map);
+// ====== Canvas Boot ======
+const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
+function resize(){ canvas.width=canvas.clientWidth; canvas.height=canvas.clientHeight; }
+window.addEventListener('resize', resize); resize();
 
-// SVG overlay for beams
-const svgLayer = L.svg({clickable:false}).addTo(map);
-let svg=null;
-function ensureSVG(){
-  const c=svgLayer._container; if(!c) return;
-  svg=c.querySelector('svg'); if(!svg){ svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('class','leaflet-zoom-animated'); c.appendChild(svg);}
-}
-map.whenReady(ensureSVG); map.on('zoom move viewreset', ensureSVG);
-
-// ========== UI refs ==========
-const moneyEl=document.getElementById('money'), oilEl=document.getElementById('oil');
-const excEl=document.getElementById('excCount'), soldierEl=document.getElementById('soldierCount'), tankEl=document.getElementById('tankCount'), shipEl=document.getElementById('shipCount');
-const queueEl=document.getElementById('queue'), logEl=document.getElementById('log'), prodPanel=document.getElementById('prodPanel'), hintEl=document.getElementById('hint');
-document.getElementById('helpBtn').onclick=()=> document.getElementById('helpModal').style.display='grid';
-document.getElementById('newGame').onclick=()=> location.reload();
-document.getElementById('toggleLand').onclick=()=>{ if(landLayer){ if(map.hasLayer(landLayer)){ map.removeLayer(landLayer); } else landLayer.addTo(map);} };
-const formationSel=document.getElementById('formationSel');
-let formation='auto'; formationSel.onchange=()=> formation=formationSel.value;
-let playerStance='aggressive'; document.getElementById('stanceBtn').onclick=()=>{ playerStance=playerStance==='aggressive'?'hold':'aggressive'; document.getElementById('stanceBtn').textContent=playerStance==='aggressive'?'Agresif':'Tut'; };
-document.getElementById('stopBtn').onclick=stopSelected;
-
-// speed
-let gameSpeed=1; const speedLbl=document.getElementById('speedLbl'); const speedRange=document.getElementById('speedRange');
-function setSpeed(v){ gameSpeed=Math.max(1,Math.min(100,v)); speedRange.value=String(gameSpeed); speedLbl.textContent=gameSpeed+'x'; hint('Hız: '+gameSpeed+'x'); }
-speedRange.addEventListener('input',()=> setSpeed(+speedRange.value)); document.querySelectorAll('[data-speed]').forEach(b=> b.onclick=()=> setSpeed(+b.dataset.speed)); setSpeed(1);
-
-// helpers
+const hintEl=document.getElementById('hint'), logEl=document.getElementById('log');
 function hint(s){ hintEl.textContent=s; }
 function log(s){ const d=document.createElement('div'); d.textContent=s; logEl.prepend(d); }
-function rand(n){ return Math.floor(Math.random()*n); } function choose(a){ return a[rand(a.length)]; }
-function distance(a,b){ return map.distance(a,b); }
-function latlngTowards(from,to,dMeters){ const total=distance(from,to); if(total===0||dMeters>=total) return to; const r=dMeters/total; return L.latLng(from.lat+(to.lat-from.lat)*r, from.lng+(to.lng-from.lng)*r); }
-function offsetDir(latlng, meters, ang){ const d=meters, a=ang; const lat=latlng.lat + (d*Math.cos(a))/111320; const lng=latlng.lng + (d*Math.sin(a))/(40075000*Math.cos(latlng.lat*Math.PI/180)/360); return L.latLng(lat,lng); }
-function offset(ll, m){ return offsetDir(ll, m, Math.random()*Math.PI*2); }
 
-// ========== Game Data ==========
-const START={ CITY_ZOOM:10, PLAYER_RADIUS:3000, AI_RADIUS:9000 };
-const COST={ mill:{money:100,oil:0,build:30}, refinery:{money:50,oil:0,build:30}, port:{money:200,oil:0,build:30}, factory:{money:150,oil:50,build:60}, barracks:{money:100,oil:0,build:30},
-             tank:{money:80,oil:40}, soldier:{money:30,oil:0}, excavator:{money:70,oil:20}, ship:{money:120,oil:60} };
-const STATS={ kepce:{hp:120,speed:18,range:0,dps:0, medium:'land'}, soldier:{hp:60,speed:22,range:45,dps:10, medium:'land'},
-              tank:{hp:200,speed:16,range:80,dps:25, medium:'land'}, ship:{hp:240,speed:20,range:90,dps:18, medium:'water'},
-              base:{hp:800}, mill:{hp:220}, refinery:{hp:240}, port:{hp:260}, factory:{hp:340}, barracks:{hp:280} };
-const RATES={ moneyPerMill:3, oilPerRef:2, tickSec:3, portBonus:0.20 };
-const LAYERS={ units:L.layerGroup().addTo(map), buildings:L.layerGroup().addTo(map), walls:L.layerGroup().addTo(map), land:L.layerGroup().addTo(map) };
-const Side={ PLAYER:'player', AI:'ai' };
-const LAND_SEEDS=[[41.0082,28.9784],[39.9208,32.8541],[48.8566,2.3522],[52.52,13.405],[40.7128,-74.0060],[34.0522,-118.2437],[35.6762,139.6503],[31.2304,121.4737],[41.9028,12.4964],[50.1109,8.6821]];
-let landLayer=null; let landRings=[]; // array of {bbox:[minLat,minLng,maxLat,maxLng], ring:[[lat,lng],...]}
+document.getElementById('help').onclick=()=> document.getElementById('modal').style.display='grid';
+document.getElementById('newGame').onclick=()=> location.reload();
 
-// ========== Entities / State ==========
-let ENT_ID=1; const ENT_INDEX=new Map(); const selection=new Set();
-class Entity{ constructor(o){ Object.assign(this,o); this.id=ENT_ID++; this.dead=false; ENT_INDEX.set(this.id,this); } }
+// ====== Economy / Data ======
+const RES={food:0, oil:0, iron:0};
+const HUD={food:document.getElementById('food'), oil:document.getElementById('oil'), iron:document.getElementById('iron'),
+  uInf:document.getElementById('uInf'), uAPC:document.getElementById('uAPC'), uTank:document.getElementById('uTank'),
+  uHIMARS:document.getElementById('uHIMARS'), uFighter:document.getElementById('uFighter'), uBomber:document.getElementById('uBomber')};
+
+const COST={
+  // Buildings (buildTime sec)
+  barracks:{food:50, oil:0, iron:40, build:10},
+  mill:{food:30, oil:0, iron:20, build:10},
+  refinery:{food:20, oil:40, iron:30, build:10},
+  mine:{food:20, oil:20, iron:40, build:10},
+  vehicleFactory:{food:40, oil:60, iron:120, build:12},
+  missileLab:{food:40, oil:90, iron:140, build:14},
+  airbase:{food:60, oil:140, iron:120, build:16},
+  adsPlant:{food:40, oil:80, iron:160, build:14}, // Air Defense System plant
+
+  // Units (trainTime sec)
+  infantry:{food:20, oil:0, iron:0, train:4, from:'barracks', icon:'🪖'},
+  bradley:{food:10, oil:25, iron:60, train:6, from:'vehicleFactory', icon:'🚛'},
+  bmp3:{food:10, oil:25, iron:55, train:6, from:'vehicleFactory', icon:'🚙'},
+  abrams:{food:0, oil:40, iron:120, train:8, from:'vehicleFactory', icon:'🛡️'},
+  leopard2:{food:0, oil:40, iron:115, train:8, from:'vehicleFactory', icon:'🛡️'},
+  himars:{food:0, oil:80, iron:100, train:9, from:'missileLab', icon:'🎯'},
+  patriot:{food:0, oil:60, iron:140, train:10, from:'adsPlant', icon:'🛰️'}, // immobile SAM
+  f16:{food:0, oil:120, iron:80, train:10, from:'airbase', icon:'🛩️'},
+  su34:{food:0, oil:160, iron:120, train:12, from:'airbase', icon:'🛫'},
+};
+const STATS={
+  infantry:{hp:100, speed:70, range:120, dps:10, role:'ground', targets:['ground']},
+  bradley:{hp:320, speed:140, range:170, dps:24, role:'ground', targets:['ground']},
+  bmp3:{hp:300, speed:150, range:160, dps:22, role:'ground', targets:['ground']},
+  abrams:{hp:620, speed:95, range:210, dps:42, role:'ground', targets:['ground']},
+  leopard2:{hp:600, speed:100, range:205, dps:40, role:'ground', targets:['ground']},
+  himars:{hp:260, speed:90, range:650, dps:90, role:'ground', targets:['ground'], rof:0.6},
+  patriot:{hp:420, speed:0, range:700, dps:75, role:'static', targets:['air'], rof:0.8, immobile:true},
+  f16:{hp:260, speed:320, range:260, dps:45, role:'air', targets:['air','ground']},
+  su34:{hp:360, speed:280, range:300, dps:90, role:'air', targets:['ground']},
+};
+const BUILD_TYPES=[
+  {key:'barracks', label:'🎖️ Kışla'},
+  {key:'mill', label:'🌾 Değirmen'},
+  {key:'refinery', label:'🛢️ Rafineri'},
+  {key:'mine', label:'⛏️ Maden'},
+  {key:'vehicleFactory', label:'🏭 Zırhlı Fabrikası'},
+  {key:'missileLab', label:'🚀 Füze Tesisi'},
+  {key:'airbase', label:'🛬 Hava Üssü'},
+  {key:'adsPlant', label:'🛰️ HSS Tesisi'},
+];
+
+// production map per building
+const PROD_BY_BUILD={
+  barracks:['infantry'],
+  vehicleFactory:['bradley','bmp3','abrams','leopard2'],
+  missileLab:['himars'],
+  airbase:['f16','su34'],
+  adsPlant:['patriot'],
+};
+
+// economy tick
+const RATES={ tick:3, foodPerMill:3, oilPerRef:2, ironPerMine:2 };
+
+// ====== World / Entities ======
+const WORLD={ w:2000, h:1400 }; // fits in canvas; no scroll
+let ENT_ID=1;
+const Side={PLAYER:'player', AI:'ai'};
+const units=[], buildings=[];
+let selection=new Set();
+let buildMode=null;
+
+function rand(n){ return Math.floor(Math.random()*n); }
+function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+
+class Entity{
+  constructor(o){ Object.assign(this,o); this.id=ENT_ID++; this.dead=false; if(this.x==null||this.y==null){ this.x=WORLD.w/2; this.y=WORLD.h/2; } }
+}
 class Unit extends Entity{
-  constructor(o){ super(o); const s=STATS[o.unitType]; this.unitType=o.unitType; this.hp=s.hp; this.speed=s.speed; this.range=s.range||0; this.dps=s.dps||0; this.medium=s.medium||'land'; this.path=[]; this.dest=null; this.target=null;
-    this.marker=createMarker(this,true); if(this.range>0) attachRangeRing(this); }
+  constructor(o){
+    super(o);
+    this.kind=o.kind;
+    const s=STATS[this.kind];
+    this.hp=s.hp; this.speed=s.speed; this.range=s.range; this.dps=s.dps; this.role=s.role; this.targets=s.targets.slice(); this.rof=s.rof||1;
+    this.fireCd=0; this.isAir=(this.role==='air');
+    this.tx=this.x; this.ty=this.y; this.target=null;
+    this.sel=false;
+  }
 }
 class Building extends Entity{
-  constructor(o){ super(o); this.buildingType=o.buildingType; this.isBase=!!o.isBase; this.hp=STATS[o.buildingType].hp; this.underConstruction=!!o.underConstruction; this.buildTime=o.buildTime||0; this.buildElapsed=0; this.marker=createMarker(this,false); if(this.underConstruction) attachBuildBar(this); }
-}
-class WallSegment extends Entity{
-  constructor(o){ super(o); this.buildingType='wall'; this.hp=400; this.latlngs=o.latlngs; this.gate=!!o.gate; this.locked=!!o.locked; this.side=o.side||Side.PLAYER; this.underConstruction=true; this.buildProgress=0; this.buildNeeded=(distance(this.latlngs[0],this.latlngs[1])/100)*6;
-    this.poly=L.polyline(this.latlngs, gateStyle(this,false)).addTo(LAYERS.walls); this.poly.on('click',()=> selectWall(this));
+  constructor(o){
+    super(o);
+    this.btype=o.btype; this.isBase=!!o.isBase;
+    this.hp= 500 + (o.isBase?500:0);
+    this.underConstruction=!!o.underConstruction;
+    this.buildTime=o.buildTime||10; this.elapsed=0;
+    this.sel=false;
   }
 }
-function gateStyle(seg,built){ const col=seg.gate?(seg.locked?'#14b8a6':'#2dd4bf'):'#93c5fd'; return seg.gate?{color:col,weight:5,opacity:built?0.95:0.7,dashArray:built?(seg.locked?'1 10':'1 4'):'6 6'}:{color:built?'#93c5fd':'#fbbf24',weight:5,opacity:built?0.9:0.8,dashArray:built?null:'6 6'}; }
-function updateWallStyle(seg){ const ratio=Math.max(0, seg.hp/400); const color=seg.gate?(seg.locked?'#14b8a6':'#2dd4bf'):(ratio<0.33?'#ef4444':ratio<0.66?'#f59e0b':'#93c5fd'); seg.poly.setStyle({color,weight:5,opacity:0.95,dashArray:seg.gate?(seg.locked?'1 10':'1 4'):null}); }
 
-// players
-const player={ money:240, oil:140, units:[], buildings:[], base:null, queue:[], ports(){return this.buildings.filter(b=>b.buildingType==='port' && !b.underConstruction).length;} };
-const ai    ={ money:240, oil:140, units:[], buildings:[], base:null, queue:[], lastThink:0, ports(){return this.buildings.filter(b=>b.buildingType==='port' && !b.underConstruction).length;} };
+// ====== UI: Build Buttons ======
+const buildBtns=document.getElementById('buildBtns');
+BUILD_TYPES.forEach(b=>{
+  const btn=document.createElement('button'); btn.className='btn';
+  const c=COST[b.key];
+  btn.innerHTML=`${b.label} <span class="small" style="opacity:.75">(${fmtCost(c)})</span>`;
+  btn.onclick=()=> startPlacing(b.key);
+  buildBtns.appendChild(btn);
+});
+function fmtCost(c){ return `🍞${c.food} 🛢️${c.oil} ⛓️${c.iron}`; }
+function canAfford(cost){ return RES.food>=cost.food && RES.oil>=cost.oil && RES.iron>=cost.iron; }
+function pay(cost){ RES.food-=cost.food; RES.oil-=cost.oil; RES.iron-=cost.iron; updateHUD(); }
 
-// ========== Markers / UI ==========
-function cssClass(ent){ if(ent.unitType) return ent.unitType; if(ent.buildingType) return ent.isBase?'base':ent.buildingType; return 'neutral'; }
-function createMarker(ent,isUnit){
-  const html=`<div class="${isUnit?'unit':'building'} ${ent.side==='player'?'player':'ai'} ${cssClass(ent)}"><div class="hpbar"><div class="hpfill" style="width:100%"></div></div></div>`;
-  const icon=L.divIcon({className:'',html,iconSize:[isUnit?22:28,isUnit?22:28]});
-  const m=L.marker(ent.pos,{icon,zIndexOffset:isUnit?1000:500}).addTo(isUnit?LAYERS.units:LAYERS.buildings);
-  m.on('click',(e)=> onLeftClickEntity(ent,e));
-  m.on('contextmenu',(e)=> onRightClickEntity(ent,e));
-  m.on('dblclick',()=> quickProduce(ent));
-  return m;
+const prodDiv=document.getElementById('prod');
+function renderProd(){
+  prodDiv.innerHTML='';
+  const sel=[...selection].filter(s=> s instanceof Building && s.side===Side.PLAYER && !s.underConstruction);
+  if(sel.length!==1){ prodDiv.innerHTML='<div style="opacity:.7">Bir bina seçin…</div>'; return; }
+  const b=sel[0];
+  const list=PROD_BY_BUILD[b.btype]||[];
+  if(!list.length){ prodDiv.innerHTML='<div style="opacity:.7">Bu binada üretim yok.</div>'; return; }
+  list.forEach(k=>{
+    const c=COST[k];
+    const btn=document.createElement('button'); btn.className='btn';
+    btn.innerHTML=`${COST[k].icon} ${labelOf(k)} <span class="small" style="opacity:.75">(${fmtCost(c)})</span>`;
+    btn.onclick=()=> produce(b,k);
+    prodDiv.appendChild(btn);
+  });
 }
-function attachBuildBar(b){ const el=b.marker.getElement()?.firstChild; if(!el) return; let bar=el.querySelector('.buildbar'); if(!bar){ bar=document.createElement('div'); bar.className='buildbar'; bar.innerHTML='<div class="buildfill" style="width:0%"></div>'; el.appendChild(bar);} }
-function updateBuildBar(b,pct){ const el=b.marker.getElement()?.firstChild; if(!el) return; const f=el.querySelector('.buildfill'); if(f) f.style.width=Math.max(0,Math.min(100,pct))+'%'; }
-function updateHPBar(ent){ const el=ent.marker?.getElement?.(); if(!el) return; const f=el.querySelector('.hpfill'); if(!f) return; const maxHP= ent.unitType? STATS[ent.unitType].hp : STATS[ent.buildingType].hp; const pct=Math.max(0,Math.min(100,(ent.hp/maxHP)*100)); f.style.width=pct+'%'; f.style.background= pct<33?'linear-gradient(90deg,#ef4444,#dc2626)': pct<66?'linear-gradient(90deg,#f59e0b,#d97706)':'linear-gradient(90deg,#22c55e,#16a34a)'; }
-
-// Range ring
-const rangeRings=new Map(); // id -> L.circle
-function attachRangeRing(ent){ if(!ent.range) return; const c=L.circle(ent.pos,{radius:ent.range, color:'#fde047', weight:1, opacity:.7, fillOpacity:.05}); rangeRings.set(ent.id,c); }
-function updateRangeRing(ent){ const circ=rangeRings.get(ent.id); if(circ){ circ.setLatLng(ent.pos); if(map.hasLayer(circ)===false && selection.has(ent)) circ.addTo(map); } }
-function showRange(ent,show){ const c=rangeRings.get(ent.id); if(!c) return; if(show){ c.addTo(map); } else { c.remove(); } }
-
-// selection
-function setSelected(ent,val){ const el=ent.marker?.getElement()?.firstChild; if(!el) return; if(val){ el.classList.add('sel'); selection.add(ent); showRange(ent,true); } else { el.classList.remove('sel'); selection.delete(ent); showRange(ent,false); } renderProductionPanel(); }
-function clearSelection(){ [...selection].forEach(e=> setSelected(e,false)); renderProductionPanel(); }
-function onLeftClickEntity(ent,e){ // select with left click
-  setTimeout(()=>{},0); // prevent context flicker
-  if(selection.has(ent) && selection.size===1) return; // keep
-  if(!e.originalEvent.shiftKey) clearSelection();
-  setSelected(ent,true);
+function labelOf(k){
+  const m={infantry:'Piyade', bradley:'M2 Bradley', bmp3:'BMP-3', abrams:'M1 Abrams', leopard2:'Leopard 2', himars:'HIMARS', patriot:'Patriot (S/AM)', f16:'F-16', su34:'Su-34'};
+  return m[k]||k;
 }
-function onRightClickEntity(ent,e){ e.originalEvent.preventDefault(); // attack with right click
+
+function startPlacing(btype){
+  const cost=COST[btype];
+  if(!canAfford(cost)){ hint('Yetersiz kaynak.'); return; }
+  buildMode=btype; hint(`${labelOfBuild(btype)} için konum seçin (sol tık).`);
+}
+function labelOfBuild(k){
+  const m={barracks:'Kışla', mill:'Değirmen', refinery:'Rafineri', mine:'Maden', vehicleFactory:'Zırhlı Fabrikası', missileLab:'Füze Tesisi', airbase:'Hava Üssü', adsPlant:'HSS Tesisi'};
+  return m[k]||k;
+}
+
+// ====== Input: Selection / Orders ======
+let mouse={x:0,y:0, down:false, drag:false, downAt:{x:0,y:0}}, selectBox=null;
+
+canvas.addEventListener('mousemove', e=>{
+  const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;
+  if(mouse.down && !mouse.drag){
+    const dx=mouse.x-mouse.downAt.x, dy=mouse.y-mouse.downAt.y;
+    if(Math.hypot(dx,dy)>6){ mouse.drag=true; }
+  }
+});
+canvas.addEventListener('mousedown', e=>{
+  if(e.button===0){
+    mouse.down=true; mouse.drag=false; mouse.downAt={x:mouse.x,y:mouse.y};
+  }
+});
+window.addEventListener('mouseup', e=>{
+  if(e.button===0 && mouse.down){
+    mouse.down=false;
+    if(buildMode){
+      const cost=COST[buildMode];
+      if(!canAfford(cost)){ hint('Yetersiz kaynak.'); buildMode=null; return; }
+      const b=new Building({x:mouse.x,y:mouse.y, btype:buildMode, side:Side.PLAYER, underConstruction:true, buildTime:cost.build});
+      buildings.push(b); pay(cost); log(`🧱 ${labelOfBuild(buildMode)} kurulum başladı (${cost.build}s)`);
+      buildMode=null; renderProd();
+    } else if(mouse.drag){
+      // box select
+      const x1=Math.min(mouse.downAt.x,mouse.x), x2=Math.max(mouse.downAt.x,mouse.x);
+      const y1=Math.min(mouse.downAt.y,mouse.y), y2=Math.max(mouse.downAt.y,mouse.y);
+      clearSelection();
+      units.filter(u=>u.side===Side.PLAYER).forEach(u=>{
+        if(u.x>=x1 && u.x<=x2 && u.y>=y1 && u.y<=y2){ u.sel=true; selection.add(u); }
+      });
+      buildings.filter(b=>b.side===Side.PLAYER).forEach(b=>{
+        if(b.x>=x1 && b.x<=x2 && b.y>=y1 && b.y<=y2){ b.sel=true; selection.add(b); }
+      });
+      hint(`${selection.size} öğe seçildi.`);
+      renderProd();
+    } else {
+      // click select / toggle
+      const ent=pickEntity(mouse.x,mouse.y);
+      if(ent){
+        if(!window.event.shiftKey) clearSelection();
+        ent.sel=!ent.sel;
+        if(ent.sel) selection.add(ent); else selection.delete(ent);
+      } else {
+        clearSelection();
+      }
+      renderProd();
+    }
+  }
+});
+canvas.addEventListener('contextmenu', e=>{
+  e.preventDefault();
   if(selection.size===0) return;
-  selection.forEach(s=>{ if(s instanceof Unit && s.dps>0){ s.target=ent; s.dest=ent.pos; s.path=[]; } });
-  hint('Saldırı emri.');
-}
-
-// production panel
-function renderProductionPanel(){
-  const items=[...selection].filter(x=> x instanceof Building && x.side===Side.PLAYER && !x.underConstruction);
-  prodPanel.innerHTML='';
-  if(items.length!==1){ prodPanel.innerHTML='<div class="opacity-60">Bir bina seçin…</div>'; return; }
-  const b=items[0]; const wrap=document.createElement('div');
-  function addBtn(title,sub,kind,handler){ const btn=document.createElement('button'); btn.className='btn w-full justify-between'; btn.innerHTML=`<span>${title}</span><span class="opacity-70 text-xs">${sub}</span>`; btn.onclick=()=> handler(kind,b); wrap.appendChild(btn); }
-  if(b.isBase) addBtn('⛏️ Kepçe', `(💰${COST.excavator.money}+🛢️${COST.excavator.oil})`, 'kepce', produceFromBuilding);
-  if(b.buildingType==='barracks') addBtn('🪖 Asker', `(💰${COST.soldier.money})`, 'soldier', produceFromBuilding);
-  if(b.buildingType==='factory') addBtn('🛡️ Tank', `(💰${COST.tank.money}+🛢️${COST.tank.oil})`, 'tank', produceFromBuilding);
-  if(b.buildingType==='port') addBtn('🚢 Gemi', `(💰${COST.ship.money}+🛢️${COST.ship.oil})`, 'ship', produceFromBuilding);
-  prodPanel.appendChild(wrap);
-}
-function quickProduce(ent){ if(!(ent instanceof Building) || ent.side!==Side.PLAYER || ent.underConstruction) return; if(ent.isBase) return produceFromBuilding('kepce',ent); if(ent.buildingType==='barracks') return produceFromBuilding('soldier',ent); if(ent.buildingType==='factory') return produceFromBuilding('tank',ent); if(ent.buildingType==='port') return produceFromBuilding('ship',ent); }
-
-// HUD
-function updateHUD(){ moneyEl.textContent=Math.floor(player.money); oilEl.textContent=Math.floor(player.oil); excEl.textContent=player.units.filter(u=>u.unitType==='kepce').length; soldierEl.textContent=player.units.filter(u=>u.unitType==='soldier').length; tankEl.textContent=player.units.filter(u=>u.unitType==='tank').length; shipEl.textContent=player.units.filter(u=>u.unitType==='ship').length; }
-
-// ========== Land (Natural Earth via TopoJSON) ==========
-async function loadLand(){
-  const url='https://unpkg.com/world-atlas@2/land-110m.json';
-  const res=await fetch(url); const topo=await res.json();
-  const gj=topojson.feature(topo, topo.objects.land); // MultiPolygon
-  landLayer=L.geoJSON(gj,{style:()=>({color:'#22d3ee',weight:0.6,opacity:.7,fillColor:'#22d3ee',fillOpacity:0.06})}).addTo(LAYERS.land);
-  // build rings cache (lat,lng)
-  landRings=[];
-  (gj.geometry.type==='MultiPolygon'?gj.geometry.coordinates:[gj.geometry.coordinates]).forEach(poly=>{
-    poly.forEach(ring=>{
-      const ringLL=ring.map(([lng,lat])=> [lat,lng]);
-      // bbox
-      let minLat= 90, minLng= 180, maxLat=-90, maxLng=-180;
-      for(const [lat,lng] of ringLL){ if(lat<minLat)minLat=lat; if(lat>maxLat)maxLat=lat; if(lng<minLng)minLng=lng; if(lng>maxLng)maxLng=lng; }
-      landRings.push({bbox:[minLat,minLng,maxLat,maxLng], ring: ringLL});
+  const target=pickEntity(mouse.x,mouse.y,true); // include enemy as attack target
+  if(target && target.side!==Side.PLAYER){
+    selection.forEach(s=>{
+      if(s instanceof Unit){ s.target=target; s.tx=target.x; s.ty=target.y; }
     });
-  });
-  hint('Kara katmanı yüklendi. Hazır.');
-}
-function pointInRing(lat,lng, ring){ // ray cast
-  let ins=false;
-  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
-    const xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
-    const intersect = ((yi>lng)!=(yj>lng)) && (lat < (xj-xi)*(lng-yi)/(yj-yi+1e-12) + xi);
-    if(intersect) ins=!ins;
-  } return ins;
-}
-function isLandLL(ll){
-  const {lat,lng}=ll;
-  for(const r of landRings){
-    const [minLat,minLng,maxLat,maxLng]=r.bbox;
-    if(lat<minLat || lat>maxLat || lng<minLng || lng>maxLng) continue;
-    if(pointInRing(lat,lng, r.ring)) return true;
+    hint('Saldırı emri verildi.');
+  } else {
+    const dest={x:mouse.x,y:mouse.y};
+    // spread destinations a bit for many units
+    const arr=[...selection].filter(s=> s instanceof Unit);
+    arr.forEach((u,i)=>{
+      const ang= (i/arr.length)*Math.PI*2;
+      const r= (i%6)*8;
+      u.tx=dest.x + Math.cos(ang)*r;
+      u.ty=dest.y + Math.sin(ang)*r;
+      u.target=null;
+    });
+    hint('Hareket emri verildi.');
   }
-  return false;
-}
-function nearCoast(ll, meters=800){
-  // sample 16 directions; land point that has water neighbor within ~meters
-  if(!isLandLL(ll)) return false;
-  for(let a=0;a<2*Math.PI;a+=Math.PI/8){
-    const p=offsetDir(ll, meters, a); if(!isLandLL(p)) return true;
+});
+
+function pickEntity(x,y, includeEnemy=false){
+  // prioritize units, then buildings
+  const all = units.slice().reverse().concat(buildings.slice().reverse());
+  for(const e of all){
+    if(!includeEnemy && e.side!==Side.PLAYER) continue; // when selecting, only own entities
+    const r = (e instanceof Unit)? 10 : 14;
+    if(dist({x,y}, e)<=r+4) return e;
   }
-  return false;
-}
-function snapToCoast(ll, max=1500){
-  // search outward for land cell with water neighbor
-  for(let r=120; r<=max; r+=120){
-    for(let a=0;a<2*Math.PI;a+=Math.PI/16){
-      const p=offsetDir(ll, r, a);
-      if(isLandLL(p) && nearCoast(p,180)) return p;
+  // when includeEnemy true (attack), allow enemy too
+  if(includeEnemy){
+    for(const e of units.concat(buildings)){
+      const r=(e instanceof Unit)?10:14;
+      if(dist({x,y}, e)<=r+4) return e;
     }
   }
   return null;
 }
-function snapToNearestLand(ll, max=1200){
-  if(isLandLL(ll)) return ll;
-  for(let r=80;r<=max;r+=100){
-    for(let a=0;a<2*Math.PI;a+=Math.PI/12){
-      const p=offsetDir(ll,r,a); if(isLandLL(p)) return p;
-    }
-  }
-  return null;
+function clearSelection(){
+  selection.forEach(s=> s.sel=false);
+  selection.clear();
 }
 
-// ========== Build / Produce ==========
-const buildBtns=document.querySelectorAll('[data-build]'); let buildMode=null;
-buildBtns.forEach(btn=> btn.onclick=()=> startBuild(btn.dataset.build));
-function startBuild(type){
-  const c=COST[type]; if(player.money<c.money || player.oil<(c.oil||0)){ hint('Yetersiz kaynak.'); return; }
-  player.money-=c.money; player.oil-=(c.oil||0); updateHUD();
-  buildMode=type; hint(`${labelOf(type)} için konum seçin.`);
-}
-function labelOf(type){ const m={mill:'Değirmen',refinery:'Rafineri',port:'Liman',factory:'Tank Fabrikası',barracks:'Kışla',tank:'Tank',soldier:'Asker',excavator:'Kepçe',ship:'Gemi'}; return m[type]||type; }
-function refund(type){ const c=COST[type]; player.money+=c.money; player.oil+=(c.oil||0); updateHUD(); }
-
-function enqueueBuildJob(sideObj, job){ const keeps=sideObj.units.filter(u=>u.unitType==='kepce'); const free=keeps.find(k=>!k.job); if(free){ free.job=job; free.dest=job.pos; free.path=computePath(free, free.pos, job.pos); } else sideObj.queue.push(job); updateQueueUI(); }
-function updateQueueUI(){ queueEl.innerHTML=''; const rows = player.units.filter(u=>u.unitType==='kepce').map(k=> k.job? `⛏️ ${labelOf(k.job.type)} kuruluyor` : '⏳ Boş').concat(player.queue.map(j=> `🧱 Sırada: ${labelOf(j.type)}`)); rows.forEach(t=>{ const li=document.createElement('li'); li.textContent=t; queueEl.appendChild(li); }); }
-
-function produceFromBuilding(kind, b){
-  const need=COST[kind==='kepce'?'excavator':kind];
-  if(player.money<(need.money||0) || player.oil<(need.oil||0)){ hint('Yetersiz kaynak.'); return; }
-  const wantLand=(kind!=='ship');
-  if(wantLand && !isLandLL(b.pos)){ hint('Kara birimi için karadaki bina gerekli.'); return; }
-  if(!wantLand && isLandLL(b.pos)){ if(!nearCoast(b.pos,400)){ hint('Liman denize erişmeli.'); return; } }
-  player.money-=(need.money||0); player.oil-=(need.oil||0); updateHUD();
-  const spawn=findSpawnAround(b.pos, kind);
-  if(!spawn){ hint('Çıkış noktası bulunamadı.'); return; }
-  const u=new Unit({side:Side.PLAYER, pos:spawn, unitType:kind}); player.units.push(u); hint(`${labelOf(kind)} üretildi.`);
-}
-function findSpawnAround(origin, kind){
-  const wantLand=(kind!=='ship');
-  for(let r=30;r<=220;r+=20){
-    for(let k=0;k<16;k++){
-      const p=offsetDir(origin,r,Math.random()*Math.PI*2);
-      if( (wantLand && isLandLL(p)) || (!wantLand && !isLandLL(p)) ) return p;
-    }
-  }
-  if( (wantLand && isLandLL(origin)) || (!wantLand && !isLandLL(origin)) ) return origin;
-  return null;
+// ====== Production ======
+function produce(b,k){
+  const def=COST[k]; if(!def){ hint('Bilinmeyen üretim'); return; }
+  if(!canAfford(def)){ hint('Yetersiz kaynak'); return; }
+  if((PROD_BY_BUILD[b.btype]||[]).indexOf(k)<0){ hint('Bu binada üretilemez'); return; }
+  pay(def);
+  setTimeout(()=>{
+    const u=new Unit({x:b.x+rand(16)-8, y:b.y+rand(16)-8, kind:k, side:Side.PLAYER});
+    units.push(u); log(`✅ ${labelOf(k)} üretildi`);
+  }, def.train*1000/timeScale);
 }
 
-// ========== Mouse Input (only mouse) ==========
-let dragSel=null, dragStart=null;
-const mapEl=document.getElementById('map');
+// ====== AI (very light) ======
+const AI={ base:null, t:0 };
+function aiInit(){
+  AI.base=new Building({x:WORLD.w*0.75, y:WORLD.h*0.25, btype:'barracks', side:Side.AI});
+  buildings.push(AI.base);
+  // give AI some econ
+  buildings.push(new Building({x:AI.base.x+80,y:AI.base.y-40,btype:'mill',side:Side.AI}));
+  buildings.push(new Building({x:AI.base.x-80,y:AI.base.y-40,btype:'refinery',side:Side.AI}));
+  buildings.push(new Building({x:AI.base.x,y:AI.base.y+70,btype:'mine',side:Side.AI}));
+  buildings.push(new Building({x:AI.base.x+140,y:AI.base.y+20,btype:'vehicleFactory',side:Side.AI}));
+  buildings.push(new Building({x:AI.base.x-140,y:AI.base.y+20,btype:'missileLab',side:Side.AI}));
+  buildings.push(new Building({x:AI.base.x,y:AI.base.y+140,btype:'airbase',side:Side.AI}));
+  // a few starting units
+  units.push(new Unit({x:AI.base.x+60,y:AI.base.y+20,kind:'infantry',side:Side.AI}));
+  units.push(new Unit({x:AI.base.x+30,y:AI.base.y+20,kind:'infantry',side:Side.AI}));
+  units.push(new Unit({x:AI.base.x+10,y:AI.base.y+20,kind:'bradley',side:Side.AI}));
+}
+function aiUpdate(dt){
+  AI.t+=dt; if(AI.t<3) return; AI.t=0;
+  // produce randomly
+  const pick=()=>{
+    const opts=['infantry','bradley','bmp3','abrams','himars','f16'];
+    const k=opts[rand(opts.length)];
+    let src='barracks';
+    if(['bradley','bmp3','abrams'].includes(k)) src='vehicleFactory';
+    if(k==='himars') src='missileLab';
+    if(k==='f16') src='airbase';
+    const b=buildings.find(x=>x.side===Side.AI && x.btype===src && !x.underConstruction);
+    if(!b) return;
+    // AI cheats a tiny bit: no cost (sade)
+    units.push(new Unit({x:b.x+rand(8)-4,y:b.y+rand(8)-4,kind:k,side:Side.AI}));
+  };
+  if(Math.random()<0.7) pick();
 
-// left mouse: selection / drag select
-mapEl.addEventListener('mousedown',(ev)=>{
-  if(ev.button!==0) return;
-  // start drag select if clicking on empty map (Leaflet fires on map container anyway)
-  dragStart={x:ev.clientX,y:ev.clientY};
-  dragSel=document.createElement('div'); dragSel.className='select-box';
-  dragSel.style.left=dragStart.x+'px'; dragSel.style.top=dragStart.y+'px'; document.body.appendChild(dragSel);
-});
-window.addEventListener('mousemove',(ev)=>{
-  if(!dragSel) return;
-  const x=Math.min(ev.clientX,dragStart.x), y=Math.min(ev.clientY,dragStart.y);
-  const w=Math.abs(ev.clientX-dragStart.x), h=Math.abs(ev.clientY-dragStart.y);
-  Object.assign(dragSel.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px'});
-});
-window.addEventListener('mouseup',(ev)=>{
-  if(!dragSel) return;
-  const rect=dragSel.getBoundingClientRect(); dragSel.remove(); dragSel=null;
-  const tl=L.point(rect.left,rect.top), br=L.point(rect.right,rect.bottom);
-  const bounds=L.latLngBounds(map.containerPointToLatLng(tl), map.containerPointToLatLng(br));
-  clearSelection(); player.units.forEach(u=>{ if(bounds.contains(u.pos)) setSelected(u,true); });
-  hint(selection.size+' birim seçildi.');
-});
-
-// contextmenu -> order (move/attack)
-map.on('contextmenu',(e)=>{
-  if(buildMode){
-    // placement with snap
-    let pos=e.latlng;
-    if(buildMode==='port'){
-      // liman: kıyıya snap et
-      const snap = (isLandLL(pos) && nearCoast(pos,400)) ? pos : (snapToCoast(pos,1500) || null);
-      if(!snap){ hint('Liman için uygun kıyı bulunamadı.'); refund(buildMode); buildMode=null; return; }
-      pos=snap;
-    }else{
-      // diğerleri: karaya snap
-      const snap = snapToNearestLand(pos,1200);
-      if(!snap){ hint('Yakınlarda kara yok.'); refund(buildMode); buildMode=null; return; }
-      pos=snap;
+  // order attack sometimes
+  if(Math.random()<0.4){
+    const target = (buildings.filter(b=>b.side===Side.PLAYER)[0]) || units.filter(u=>u.side===Side.PLAYER)[0];
+    if(target){
+      units.filter(u=>u.side===Side.AI).forEach(u=>{ u.target=target; u.tx=target.x; u.ty=target.y; });
     }
-    const job={type:buildMode, pos}; enqueueBuildJob(player, job); hint(labelOf(buildMode)+' inşası kuyruğa eklendi.'); buildMode=null; return;
   }
-  if(selection.size===0) return;
-  const clickLL=e.latlng;
-  // formation offsets
-  const units=[...selection].filter(x=> x instanceof Unit);
-  if(units.length===0) return;
-  const slots = formationOffsets(units.length, formation, units[0].pos, clickLL);
-  units.forEach((u,i)=>{
-    const dest=L.latLng(clickLL.lat + slots[i].dLat, clickLL.lng + slots[i].dLng);
-    const clamped=clampToMedium(u, dest);
-    u.dest=clamped; u.path=computePath(u, u.pos, clamped); u.target=null;
-  });
-  hint('Hareket emri verildi.');
-});
-
-// right click on entity handled in onRightClickEntity()
-
-// ========== Formation ==========
-function formationOffsets(n, mode, from, to){
-  const out=[]; if(n===1) return [{dLat:0,dLng:0}];
-  const dirA=Math.atan2(to.lng-from.lng, to.lat-from.lat); // not exact but ok
-  const baseStep=0.0005; // ~50-60m around mid lat (rough)
-  if(mode==='line'){
-    // perpendicular to direction
-    const perp=dirA+Math.PI/2;
-    const half=(n-1)/2;
-    for(let i=0;i<n;i++){
-      const k=(i-half);
-      out.push({dLat: baseStep*k*Math.cos(perp), dLng: baseStep*k*Math.sin(perp)});
-    }
-  }else if(mode==='box'){
-    const side=Math.ceil(Math.sqrt(n)); const step=baseStep;
-    for(let i=0;i<n;i++){
-      const r=Math.floor(i/side), c=i%side;
-      const ox=(c-(side-1)/2)*step, oy=(r-(side-1)/2)*step;
-      // rotate by dirA a little (keep simple)
-      out.push({dLat: ox*Math.cos(dirA)-oy*Math.sin(dirA), dLng: ox*Math.sin(dirA)+oy*Math.cos(dirA)});
-    }
-  }else if(mode==='wedge'){
-    const step=baseStep, layers=Math.ceil(n/3);
-    let count=0;
-    for(let L=0;count<n;L++){
-      const width=L+1;
-      for(let i=0;i<Math.min(width*2+1, n-count); i++){
-        const lateral=(i-width)*step*0.8, forward=L*step*1.2;
-        // rotate
-        const dLat = forward*Math.cos(dirA) - lateral*Math.sin(dirA);
-        const dLng = forward*Math.sin(dirA) + lateral*Math.cos(dirA);
-        out.push({dLat, dLng}); count++;
-      }
-    }
-  }else{ // auto
-    return formationOffsets(n, n<=4?'line':'box', from, to);
-  }
-  return out;
 }
 
-// ========== Movement constraints & Pathfinding ==========
-function clampToMedium(u, dest){
-  const wantLand=(u.medium||'land')==='land';
-  const total=Math.max(1, distance(u.pos,dest));
-  const step=300;
-  let last=u.pos, d=0;
-  while(d<=total){
-    const p=latlngTowards(u.pos,dest,d);
-    const land=isLandLL(p);
-    if( (wantLand && !land) || (!wantLand && land) ) return last;
-    last=p; d+=step;
-  }
-  return dest;
-}
-
-// Local-grid A* using isLandLL
-function computePath(u, fromLL, toLL){
-  const wantLand=(u.medium||'land')==='land';
-  const midLat=(fromLL.lat+toLL.lat)/2;
-  const mPerDegLat=111320, mPerDegLng=40075000*Math.cos(midLat*Math.PI/180)/360;
-  const padM=2400, cell=220; // grid cell ~220m
-  const minLat=Math.min(fromLL.lat,toLL.lat) - padM/mPerDegLat;
-  const maxLat=Math.max(fromLL.lat,toLL.lat) + padM/mPerDegLat;
-  const minLng=Math.min(fromLL.lng,toLL.lng) - padM/mPerDegLng;
-  const maxLng=Math.max(fromLL.lng,toLL.lng) + padM/mPerDegLng;
-  const rows=Math.max(12, Math.min(80, Math.ceil((maxLat-minLat)/(cell/mPerDegLat))));
-  const cols=Math.max(12, Math.min(80, Math.ceil((maxLng-minLng)/(cell/mPerDegLng))));
-  function toCell(ll){ const x=Math.round((ll.lng-minLng)/(maxLng-minLng)*(cols-1)); const y=Math.round((ll.lat-minLat)/(maxLat-minLat)*(rows-1)); return {x:Math.max(0,Math.min(cols-1,x)), y:Math.max(0,Math.min(rows-1,y))}; }
-  function cellLL(x,y){ const lng=minLng + (x/(cols-1))*(maxLng-minLng); const lat=minLat + (y/(rows-1))*(maxLat-minLat); return L.latLng(lat,lng); }
-  function pass(x,y){
-    const ll=cellLL(x,y); const land=isLandLL(ll);
-    return wantLand? land : !land;
-  }
-  const s=toCell(fromLL), g=toCell(toLL);
-  if(!pass(s.x,s.y) || !pass(g.x,g.y)) return [toLL];
-  const key=(x,y)=>x+'_'+y; const open=new Map(); const gMap=new Map(); const fMap=new Map(); const came=new Map();
-  function h(x,y){ const ll=cellLL(x,y); return distance(ll,toLL)/cell; }
-  function neighbors(x,y){
-    const out=[]; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
-      if(dx===0&&dy===0) continue; const nx=x+dx, ny=y+dy;
-      if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
-      if(!pass(nx,ny)) continue;
-      // walls/closed gates block
-      const a=cellLL(x,y), b=cellLL(nx,ny);
-      if(anyBlockingWall(u,a,b)) continue;
-      out.push([nx,ny, (dx&&dy)?1.4:1 ]);
-    } return out;
-  }
-  const sK=key(s.x,s.y); open.set(sK,[s.x,s.y]); gMap.set(sK,0); fMap.set(sK,h(s.x,s.y));
-  while(open.size){
-    let curK=null, cur=null, bestF=1e9;
-    for(const [kk,xy] of open){ const ff=fMap.get(kk)??1e9; if(ff<bestF){ bestF=ff; curK=kk; cur=xy; } }
-    const [cx,cy]=cur; if(cx===g.x && cy===g.y){
-      const path=[]; let kk=curK;
-      while(kk){ const [px,py]=open.get(kk)||[cx,cy]; path.push(cellLL(px,py)); const c=came.get(kk); kk=c?c.key:null; }
-      const arr=path.reverse(); arr[arr.length-1]=toLL; return arr;
-    }
-    open.delete(curK);
-    for(const [nx,ny,w] of neighbors(cx,cy)){
-      const nk=key(nx,ny); const tentative=(gMap.get(curK)||1e9)+w;
-      if(tentative < (gMap.get(nk)||1e9)){
-        came.set(nk,{key:curK}); gMap.set(nk,tentative); fMap.set(nk, tentative + h(nx,ny)); open.set(nk,[nx,ny]);
-      }
-    }
-  }
-  return [toLL];
-}
-function segsIntersect(a,b,c,d){ const o=(p,q,r)=> Math.sign((q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x)); const oa=o(a,b,c), ob=o(a,b,d), oc=o(c,d,a), od=o(c,d,b); return (oa*ob<0 && oc*od<0); }
-function anyBlockingWall(u, aLL, bLL){
-  for(const seg of walls){ if(seg.dead) continue; if(seg.gate && !seg.locked && seg.side===u.side) continue;
-    const p1=map.latLngToLayerPoint(aLL), p2=map.latLngToLayerPoint(bLL);
-    const q1=map.latLngToLayerPoint(seg.latlngs[0]), q2=map.latLngToLayerPoint(seg.latlngs[1]);
-    if(segsIntersect(p1,p2,q1,q2)) return true;
-  } return false;
-}
-
-// ========== Combat ==========
-function inRange(u,v){ return distance(u.pos,(v.pos||midPoint(v))) <= (u.range||0); }
-function midPoint(seg){ return L.latLng((seg.latlngs[0].lat+seg.latlngs[1].lat)/2, (seg.latlngs[0].lng+seg.latlngs[1].lng)/2); }
-function drawBeam(a,b){ ensureSVG(); if(!svg) return; const p1=map.latLngToLayerPoint(a), p2=map.latLngToLayerPoint(b); const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',p1.x); line.setAttribute('y1',p1.y); line.setAttribute('x2',p2.x); line.setAttribute('y2',p2.y); line.setAttribute('class','beam'); svg.appendChild(line); setTimeout(()=> line.remove(), 160); }
-function dealDamage(att, target, dt){ if(att.dps<=0) return; target.hp -= att.dps*dt; if(target instanceof WallSegment) updateWallStyle(target); else updateHPBar(target); if(target.hp<=0) destroyEntity(target,att); if(Math.random()<.25) drawBeam(att.pos,(target.pos||midPoint(target))); }
-function destroyEntity(ent,killer){ ent.dead=true; if(ent.marker) ent.marker.remove(); if(ent.poly) ent.poly.remove(); if(ent instanceof Unit){ const arr=(ent.side===Side.PLAYER?player.units:ai.units); const i=arr.indexOf(ent); if(i>=0) arr.splice(i,1); } else if(ent instanceof WallSegment){ const i=walls.indexOf(ent); if(i>=0) walls.splice(i,1); } else if(ent instanceof Building){ const arr=(ent.side===Side.PLAYER?player.buildings:ai.buildings); const i=arr.indexOf(ent); if(i>=0) arr.splice(i,1); if(ent.isBase){ endGame(ent.side!==Side.PLAYER); } } if(selection.has(ent)) selection.delete(ent); updateHUD(); renderProductionPanel(); }
-function endGame(win){ const modal=document.getElementById('helpModal'); const box=modal.querySelector('.glass'); modal.style.display='grid'; box.querySelector('.text-lg').textContent = win? 'Zafer!' : 'Yenilgi!'; box.querySelector('ul').innerHTML = `<li>${win? 'AI üssünü yok ettiniz.' : 'Üssünüz yok edildi.'}</li>`; }
-
-// ========== Walls & Gates (opsiyonel çizim kurgusu minimalist) ==========
-const walls=[]; const pendingWalls=[];
-function selectWall(seg){ clearSelection(); selection.add(seg); hint(seg.gate? 'Seçili: Kapı' : 'Seçili: Duvar'); }
-
-// ========== Economy & Loop ==========
-let incomeTimer=0;
-function incomeTick(dt){
-  incomeTimer+=dt; if(incomeTimer<RATES.tickSec) return; incomeTimer=0;
-  const mills=player.buildings.filter(b=>b.buildingType==='mill' && !b.underConstruction).length;
-  const refs=player.buildings.filter(b=>b.buildingType==='refinery' && !b.underConstruction).length;
-  const ports=player.ports();
-  player.money += mills*RATES.moneyPerMill*(1+ports*RATES.portBonus);
-  player.oil   += refs*RATES.oilPerRef;
-  // simple AI econ
-  const am=ai.buildings.filter(b=>b.buildingType==='mill' && !b.underConstruction).length;
-  const ar=ai.buildings.filter(b=>b.buildingType==='refinery' && !b.underConstruction).length;
-  const ap=ai.ports();
-  ai.money += am*RATES.moneyPerMill*(1+ap*RATES.portBonus);
-  ai.oil   += ar*RATES.oilPerRef;
+// ====== Economy Loop ======
+let econT=0;
+function econUpdate(dt){
+  econT+=dt; if(econT<RATES.tick) return; econT=0;
+  const mills=buildings.filter(b=>b.side===Side.PLAYER && b.btype==='mill' && !b.underConstruction).length;
+  const refs =buildings.filter(b=>b.side===Side.PLAYER && b.btype==='refinery' && !b.underConstruction).length;
+  const mines=buildings.filter(b=>b.side===Side.PLAYER && b.btype==='mine' && !b.underConstruction).length;
+  RES.food += mills*RATES.foodPerMill;
+  RES.oil  += refs *RATES.oilPerRef;
+  RES.iron += mines*RATES.ironPerMine;
   updateHUD();
 }
-
-// ========== Update ==========
-function updateUnits(dt){
-  const all=player.units.concat(ai.units);
-  for(const u of all){
-    // auto target (aggressive)
-    if((playerStance==='aggressive' || u.aMove) && !u.target && u.dps>0){
-      const foes = (u.side===Side.PLAYER? ai.units.concat(ai.buildings) : player.units.concat(player.buildings));
-      let best=null, bestD=9999; foes.forEach(f=>{ const d=distance(u.pos,(f.pos||midPoint(f))); if(d<bestD && d<(u.range+90)){ best=f; bestD=d; }});
-      if(best) u.target=best;
-    }
-    // attack
-    if(u.target && !u.target.dead){
-      const tpos=(u.target.pos||midPoint(u.target));
-      if(inRange(u,u.target)) dealDamage(u,u.target,dt);
-      else { u.path = computePath(u, u.pos, clampToMedium(u,tpos)); }
-    }
-    // move along path
-    if(u.path && u.path.length){
-      const goal=u.path[0]; const step=u.speed*dt; const toGo=distance(u.pos, goal);
-      if(step>=toGo){ u.pos=goal; u.path.shift(); u.marker.setLatLng(u.pos); updateRangeRing(u); }
-      else { u.pos=latlngTowards(u.pos, goal, step); u.marker.setLatLng(u.pos); updateRangeRing(u); }
-    }
-  }
+function updateHUD(){
+  HUD.food.textContent=Math.floor(RES.food);
+  HUD.oil.textContent=Math.floor(RES.oil);
+  HUD.iron.textContent=Math.floor(RES.iron);
+  HUD.uInf.textContent=units.filter(u=>u.side===Side.PLAYER && u.kind==='infantry').length;
+  HUD.uAPC.textContent=units.filter(u=>u.side===Side.PLAYER && (u.kind==='bradley'||u.kind==='bmp3')).length;
+  HUD.uTank.textContent=units.filter(u=>u.side===Side.PLAYER && (u.kind==='abrams'||u.kind==='leopard2')).length;
+  HUD.uHIMARS.textContent=units.filter(u=>u.side===Side.PLAYER && u.kind==='himars').length;
+  HUD.uFighter.textContent=units.filter(u=>u.side===Side.PLAYER && u.kind==='f16').length;
+  HUD.uBomber.textContent=units.filter(u=>u.side===Side.PLAYER && u.kind==='su34').length;
 }
-function updateBuilds(dt){
-  for(const u of player.units.concat(ai.units)){
-    if(u.unitType!=='kepce' || !u.job) continue;
-    const job=u.job;
-    if(distance(u.pos, job.pos)>18){ if(!u.path || !u.path.length){ u.path=computePath(u,u.pos,job.pos); } continue; }
-    if(!job.started){
-      if(job.type==='wall'){ /* left minimal - duvar tool opsiyonel */ }
-      else{
-        const b=new Building({side:u.side,pos:job.pos,buildingType:job.type,underConstruction:true,buildTime:COST[job.type].build});
-        (u.side===Side.PLAYER?player.buildings:ai.buildings).push(b); job.bldg=b;
-        if(b.buildingType==='port'){ if(!(isLandLL(b.pos) && nearCoast(b.pos,400))){ // güvenlik
-          b.marker.remove(); const arr=(u.side===Side.PLAYER?player.buildings:ai.buildings); arr.splice(arr.indexOf(b),1); hint('Liman için uygun kıyı bulunamadı.'); u.job=null; continue; } }
+
+// ====== Movement / Combat ======
+function unitUpdate(u, dt){
+  // acquire target if none and enemy in vicinity
+  if(!u.target){
+    const foes = units.concat(buildings).filter(e=> e.side!==u.side && !e.dead);
+    let best=null, bestD=1e9;
+    for(const f of foes){
+      if(f instanceof Unit){
+        // check target type
+        const isAir = f.isAir===true;
+        if(isAir && !u.targets.includes('air')) continue;
+        if(!isAir && !u.targets.includes('ground')) continue;
+      } else {
+        // buildings = ground
+        if(!u.targets.includes('ground')) continue;
       }
-      job.started=true;
+      const d=dist(u,f);
+      if(d<bestD && d<u.range+120) { best=f; bestD=d; }
     }
-    if(job.type!=='wall'){
-      const b=job.bldg; b.buildElapsed+=dt; updateBuildBar(b,(b.buildElapsed/b.buildTime)*100);
-      if(b.buildElapsed>=b.buildTime){ b.underConstruction=false; const el=b.marker.getElement()?.firstChild; if(el){ const bar=el.querySelector('.buildbar'); if(bar) bar.remove(); } updateHPBar(b); u.job=null; updateQueueUI(); hint(labelOf(b.buildingType)+' tamamlandı.'); }
+    if(best) u.target=best;
+  }
+
+  // fire
+  u.fireCd=Math.max(0, u.fireCd - dt);
+  if(u.target && !u.target.dead){
+    const d=dist(u,u.target);
+    if(d<=u.range){
+      if(u.fireCd<=0){
+        // damage
+        u.target.hp -= u.dps;
+        drawShot(u,u.target);
+        u.fireCd = 1/ (u.rof||1);
+        if(u.target.hp<=0){ destroy(u.target, u); u.target=null; }
+      }
+    } else {
+      // chase
+      u.tx=u.target.x; u.ty=u.target.y;
     }
+  }
+
+  // move
+  const dx=u.tx-u.x, dy=u.ty-u.y; const dd=Math.hypot(dx,dy);
+  if(dd>1){
+    const step = u.speed * dt;
+    const t = Math.min(1, step/dd);
+    u.x += dx*t; u.y += dy*t;
   }
 }
 
-// ========== Orders ==========
-function stopSelected(){ selection.forEach(ent=>{ if(ent instanceof Unit){ ent.dest=null; ent.path=[]; ent.target=null; ent.aMove=false; } }); hint('Seçili birimler durdu.'); }
-
-// ========== HUD / Queue ==========
-function updateQueueUI(){ queueEl.innerHTML=''; const rows = player.units.filter(u=>u.unitType==='kepce').map(k=> k.job? `⛏️ ${labelOf(k.job.type)} kuruluyor` : '⏳ Boş').concat(player.queue.map(j=> `🧱 Sırada: ${labelOf(j.type)}`)); rows.forEach(t=>{ const li=document.createElement('li'); li.textContent=t; queueEl.appendChild(li); }); }
-
-// ========== Clicks on Map (left = selection handled above, right = orders handled) ==========
-map.on('click',(e)=>{
-  if(buildMode){ // sol tık ile de kabul: kolaylık
-    let pos=e.latlng;
-    if(buildMode==='port'){ const s=(isLandLL(pos) && nearCoast(pos,400))?pos:(snapToCoast(pos,1500)||null); if(!s){ hint('Liman için kıyı bulunamadı.'); refund(buildMode); buildMode=null; return; } pos=s; }
-    else { const s=snapToNearestLand(pos,1200); if(!s){ hint('Yakınlarda kara yok.'); refund(buildMode); buildMode=null; return; } pos=s; }
-    enqueueBuildJob(player, {type:buildMode, pos}); hint(labelOf(buildMode)+' inşası kuyruğa eklendi.'); buildMode=null;
-  } else {
-    // left click ground: clear selection
-    if(!e.originalEvent.shiftKey) { /* kullanıcı alışkanlığına göre seçimi koruyalım; temizlemeyelim */ }
-  }
-});
-
-// ========== AI (minimal) ==========
-function aiThink(dt){
-  ai.lastThink+=dt; if(ai.lastThink<3) return; ai.lastThink=0;
-  const r=Math.random();
-  if(r<0.35 && ai.money>=COST.mill.money){ ai.money-=COST.mill.money; enqueueBuildJob(ai,{type:'mill',pos: snapToNearestLand(ai.base.pos)}); }
-  else if(r<0.6 && ai.money>=COST.refinery.money){ ai.money-=COST.refinery.money; enqueueBuildJob(ai,{type:'refinery',pos:snapToNearestLand(ai.base.pos)}); }
-  else if(r<0.75 && ai.money>=COST.barracks.money){ ai.money-=COST.barracks.money; enqueueBuildJob(ai,{type:'barracks',pos:snapToNearestLand(ai.base.pos)}); }
-  else if(r<0.85 && ai.money>=COST.factory.money && ai.oil>=COST.factory.oil){ ai.money-=COST.factory.money; ai.oil-=COST.factory.oil; enqueueBuildJob(ai,{type:'factory',pos:snapToNearestLand(ai.base.pos)}); }
-  else{
-    const b = ai.buildings.filter(b=>!b.underConstruction)[rand(Math.max(1,ai.buildings.length||1))];
-    if(b){ if(b.buildingType==='barracks' && ai.money>=COST.soldier.money){ ai.money-=COST.soldier.money; ai.units.push(new Unit({side:Side.AI,pos:findSpawnAround(b.pos,'soldier'),unitType:'soldier'})); }
-           if(b.buildingType==='factory' && ai.money>=COST.tank.money && ai.oil>=COST.tank.oil){ ai.money-=COST.tank.money; ai.oil-=COST.tank.oil; ai.units.push(new Unit({side:Side.AI,pos:findSpawnAround(b.pos,'tank'),unitType:'tank'})); } }
-  }
-  if(Math.random()<0.5){ const tgt=choose(player.units.concat(player.buildings).filter(Boolean)); if(tgt){ ai.units.forEach(u=>{ if(u.dps>0){ u.target=tgt; u.dest=tgt.pos; u.path=computePath(u,u.pos,u.dest); } }); } }
+function destroy(e,killer){
+  e.dead=true;
+  // remove from arrays on sweep
+  if(killer) log(`${killer.side===Side.PLAYER?'Bizim':'AI'} ${labelEnt(killer)} → ${labelEnt(e)} yok etti.`);
 }
 
-// ========== Loop ==========
+function labelEnt(e){
+  if(e instanceof Unit) return labelOf(e.kind);
+  return labelOfBuild(e.btype)+(e.isBase?' (Üs)':'');
+}
+
+function drawShot(a,b){
+  shots.push({x1:a.x,y1:a.y,x2:b.x,y2:b.y,t:0.12});
+}
+
+const shots=[];
+
+// ====== Game Init ======
+function init(){
+  // player base + econ
+  RES.food=120; RES.oil=80; RES.iron=100;
+  buildings.push(new Building({x:WORLD.w*0.25, y:WORLD.h*0.75, btype:'barracks', side:Side.PLAYER, isBase:true}));
+  buildings.push(new Building({x:WORLD.w*0.25+100, y:WORLD.h*0.75-60, btype:'mill', side:Side.PLAYER}));
+  buildings.push(new Building({x:WORLD.w*0.25-100, y:WORLD.h*0.75-60, btype:'refinery', side:Side.PLAYER}));
+  buildings.push(new Building({x:WORLD.w*0.25, y:WORLD.h*0.75+80, btype:'mine', side:Side.PLAYER}));
+  buildings.push(new Building({x:WORLD.w*0.25+160, y:WORLD.h*0.75+20, btype:'vehicleFactory', side:Side.PLAYER}));
+  buildings.push(new Building({x:WORLD.w*0.25-160, y:WORLD.h*0.75+20, btype:'airbase', side:Side.PLAYER}));
+  // start units
+  units.push(new Unit({x:WORLD.w*0.25+30,y:WORLD.h*0.75+10,kind:'infantry',side:Side.PLAYER}));
+  units.push(new Unit({x:WORLD.w*0.25+50,y:WORLD.h*0.75-10,kind:'infantry',side:Side.PLAYER}));
+  units.push(new Unit({x:WORLD.w*0.25+70,y:WORLD.h*0.75+0,kind:'bradley',side:Side.PLAYER}));
+  units.push(new Unit({x:WORLD.w*0.25+90,y:WORLD.h*0.75+20,kind:'abrams',side:Side.PLAYER}));
+
+  aiInit();
+  updateHUD(); hint('Hazır: Bina kur, birim üret, sağ tıkla yönet.');
+  selfTests();
+}
+init();
+
+// ====== Render ======
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // subtle grid is via CSS; draw entities
+  // draw buildings
+  for(const b of buildings){
+    if(b.dead) continue;
+    const r=16;
+    // base shape
+    ctx.save();
+    ctx.translate(b.x,b.y);
+    ctx.fillStyle = b.side===Side.PLAYER ? 'rgba(16,185,129,.95)' : 'rgba(96,165,250,.95)';
+    ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.roundRect(-r,-r, r*2, r*2, 6); ctx.fill(); ctx.stroke();
+    // icon
+    ctx.fillStyle='#081017'; ctx.font='14px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(bIcon(b.btype),0,0);
+    // HP bar
+    const max = b.isBase? 1000 : 500;
+    const pct=Math.max(0,Math.min(1,b.hp/max));
+    ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(-22, r+6, 44, 4);
+    ctx.fillStyle= pct<.33? '#ef4444' : pct<.66? '#f59e0b' : '#22c55e';
+    ctx.fillRect(-22, r+6, 44*pct, 4);
+    if(b.sel){
+      ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=2; ctx.strokeRect(-r-3,-r-3,(r*2)+6,(r*2)+6);
+    }
+    // under construction
+    if(b.underConstruction){
+      const p=Math.min(1,b.elapsed/(b.buildTime||10));
+      ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(-22, -r-8, 44, 4);
+      ctx.fillStyle='#fde047'; ctx.fillRect(-22, -r-8, 44*p, 4);
+    }
+    ctx.restore();
+  }
+
+  // draw units
+  for(const u of units){
+    if(u.dead) continue;
+    const r=10;
+    ctx.save(); ctx.translate(u.x,u.y);
+    ctx.fillStyle = u.side===Side.PLAYER ? 'rgba(16,185,129,.95)' : 'rgba(96,165,250,.95)';
+    ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+    ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.stroke();
+    // icon text
+    ctx.fillStyle='#081017'; ctx.font='12px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(uIcon(u.kind),0,0);
+
+    // HP bar
+    const max=STATS[u.kind].hp; const pct=Math.max(0,Math.min(1,u.hp/max));
+    ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(-18, r+5, 36, 3);
+    ctx.fillStyle= pct<.33? '#ef4444' : pct<.66? '#f59e0b' : '#22c55e';
+    ctx.fillRect(-18, r+5, 36*pct, 3);
+
+    if(u.sel){
+      // selection ring
+      ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke();
+      // range ring
+      ctx.strokeStyle='rgba(253,224,71,.9)'; ctx.fillStyle='rgba(253,224,71,.08)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(0,0,u.range,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // shots
+  for(const s of shots){
+    ctx.strokeStyle='#fde047'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
+  }
+
+  // selection rectangle
+  if(mouse.down && mouse.drag){
+    ctx.strokeStyle='rgba(147,197,253,.9)'; ctx.setLineDash([5,4]); ctx.lineWidth=1;
+    ctx.fillStyle='rgba(59,130,246,.15)';
+    const x1=Math.min(mouse.downAt.x,mouse.x), x2=Math.max(mouse.downAt.x,mouse.x);
+    const y1=Math.min(mouse.downAt.y,mouse.y), y2=Math.max(mouse.downAt.y,mouse.y);
+    ctx.fillRect(x1,y1,x2-x1,y2-y1); ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    ctx.setLineDash([]);
+  }
+}
+
+// Icons
+function bIcon(t){
+  return t==='barracks'?'🎖️': t==='mill'?'🌾': t==='refinery'?'🛢️': t==='mine'?'⛏️': t==='vehicleFactory'?'🏭': t==='missileLab'?'🚀': t==='airbase'?'🛬': t==='adsPlant'?'🛰️':'🏚️';
+}
+function uIcon(k){
+  return COST[k]?.icon || '❓';
+}
+
+// ====== Update Loop ======
+let timeScale=1; // 1..100
+const spd=document.getElementById('speed'), spdLbl=document.getElementById('spdLbl');
+function setSpeed(v){ timeScale=v; spd.value=v; spdLbl.textContent=v+'x'; hint('Hız: '+v+'x'); }
+spd.oninput=()=> setSpeed(+spd.value);
+document.querySelectorAll('[data-s]').forEach(b=> b.onclick=()=> setSpeed(+b.dataset.s));
+
 let last=performance.now();
 function loop(now){
-  const dt=Math.min(0.05,(now-last)/1000)*gameSpeed; last=now;
-  updateUnits(dt); updateBuilds(dt); incomeTick(dt); aiThink(dt);
+  const dt = Math.min(0.05, (now-last)/1000) * timeScale; last=now;
+  // build timers
+  for(const b of buildings){ if(b.underConstruction){ b.elapsed+=dt; if(b.elapsed>=b.buildTime){ b.underConstruction=false; log(`✅ ${labelOfBuild(b.btype)} tamamlandı`);} } }
+
+  // update units
+  for(const u of units){ if(!u.dead) unitUpdate(u, dt); }
+
+  // cleanup dead
+  sweep();
+
+  // shots lifespan
+  for(let i=shots.length-1;i>=0;i--){ shots[i].t-=dt; if(shots[i].t<=0) shots.splice(i,1); }
+
+  // economy + ai
+  econUpdate(dt); aiUpdate(dt);
+
+  draw();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
-// ========== INIT ==========
-async function initGame(){
-  map.setView(choose(LAND_SEEDS), START.CITY_ZOOM);
-  await loadLand();
-
-  const center=choose(LAND_SEEDS); const cLL=L.latLng(center[0],center[1]);
-  const pPos=offsetDir(cLL, START.PLAYER_RADIUS, Math.random()*Math.PI*2);
-  const aPos=offsetDir(cLL, START.AI_RADIUS, Math.random()*Math.PI*2);
-  const pBase=new Building({side:Side.PLAYER,pos:snapToNearestLand(pPos),buildingType:'base',isBase:true});
-  const aBase=new Building({side:Side.AI,pos:snapToNearestLand(aPos),buildingType:'base',isBase:true});
-  player.base=pBase; ai.base=aBase; player.buildings.push(pBase); ai.buildings.push(aBase);
-  player.units.push(new Unit({side:Side.PLAYER,pos:offset(pBase.pos,120),unitType:'kepce'}));
-  ai.units.push(new Unit({side:Side.AI,pos:offset(aBase.pos,120),unitType:'kepce'}));
-  updateHUD(); updateQueueUI(); hint('Hazır. (Sol: seç, Sağ: hareket/saldır, Dizilim: üst bardan)');
+function sweep(){
+  for(let i=units.length-1;i>=0;i--){ if(units[i].dead) units.splice(i,1); }
+  for(let i=buildings.length-1;i>=0;i--){ if(buildings[i].dead) buildings.splice(i,1); }
 }
-initGame();
 
-})();</script>
+// ====== Utils / Tests ======
+function selfTests(){
+  console.group('%cSelf-Tests','color:#10b981;font-weight:bold');
+  try{
+    // stats completeness
+    Object.keys(PROD_BY_BUILD).forEach(b=>{
+      PROD_BY_BUILD[b].forEach(k=>{ console.assert(STATS[k], 'STAT yok:', k); console.assert(COST[k], 'COST yok:', k); });
+    });
+    // produce feasibility
+    const bb=buildings.find(x=>x.side===Side.PLAYER && x.btype==='barracks');
+    console.assert(!!bb,'Player kışla var');
+    console.log('✅ Tests OK');
+  }catch(e){ console.error('❌ Test hata', e); }
+  console.groupEnd();
+}
+
+// ====== End ======
+})();
+</script>
 </body>
 </html>
