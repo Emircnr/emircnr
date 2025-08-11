@@ -16,13 +16,8 @@
   .btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--text);border-radius:10px;padding:.45rem .7rem;cursor:pointer}
   .panel{position:absolute;z-index:5;background:linear-gradient(180deg,rgba(17,26,43,.85),rgba(11,18,32,.85));border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px}
   .left{left:10px;top:10px;width:340px} .right{right:10px;top:10px;width:360px}
-  #game{display:block;width:100%;height:100%;background:
-    radial-gradient(800px 600px at 30% 20%, rgba(99,102,241,.06), transparent 70%),
-    radial-gradient(900px 700px at 70% 70%, rgba(34,197,94,.06), transparent 72%),
-    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(255,255,255,.03) 1px, transparent 1px);
-    background-size:cover,cover, 40px 40px, 40px 40px;
-  }
+  /* Canvas arka planını artık JS ile çiziyoruz; CSS grid desenini bıraksak da üstüne çizildiği için görünmeyecek */
+  #game{display:block;width:100%;height:100%;}
   #hint{position:absolute;left:50%;transform:translateX(-50%);bottom:14px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);padding:.4rem .7rem;border-radius:10px;z-index:6;font-size:13px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
   .small{font-size:12px;opacity:.8}
@@ -76,7 +71,7 @@
       <div id="log" class="list"></div>
     </div>
 
-    <div id="hint">Yükleniyor…</div>
+    <div id="hint">Uydu haritası yükleniyor…</div>
   </main>
 
   <footer>
@@ -113,6 +108,29 @@ function log(s){ const d=document.createElement('div'); d.textContent=s; logEl.p
 document.getElementById('help').onclick=()=> document.getElementById('modal').style.display='grid';
 document.getElementById('newGame').onclick=()=> location.reload();
 
+// ====== (YENİ) Dünya Uydu Haritası ======
+const WORLD_IMG_URL = 'https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73909/world.topo.bathy.200412.3x5400x2700.jpg'; // NASA Blue Marble (equirectangular)
+const worldImg = new Image();
+worldImg.crossOrigin = 'anonymous';
+let worldReady = false;
+worldImg.onload = ()=>{ worldReady = true; hint('Hazır: Bina kur, birim üret, sağ tıkla yönet.'); };
+worldImg.onerror = ()=>{ hint('Harita yüklenemedi. Ağ/URL engeli olabilir.'); };
+worldImg.src = WORLD_IMG_URL;
+
+function drawImageCover(img){
+  const cw = canvas.width, ch = canvas.height;
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+  // cover hesaplama (aspect koru, taşanı kırp)
+  const ca = cw/ch, ia = iw/ih;
+  let w,h,x,y;
+  if(ca > ia){ w = cw; h = cw / ia; x = 0; y = (ch - h) / 2; }
+  else { h = ch; w = ch * ia; y = 0; x = (cw - w) / 2; }
+  ctx.drawImage(img, x, y, w, h);
+  // görünürlüğü arttırmak için çok hafif karartma
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(0,0,cw,ch);
+}
+
 // ====== Economy / Data ======
 const RES={food:0, oil:0, iron:0};
 const HUD={food:document.getElementById('food'), oil:document.getElementById('oil'), iron:document.getElementById('iron'),
@@ -128,7 +146,7 @@ const COST={
   vehicleFactory:{food:40, oil:60, iron:120, build:12},
   missileLab:{food:40, oil:90, iron:140, build:14},
   airbase:{food:60, oil:140, iron:120, build:16},
-  adsPlant:{food:40, oil:80, iron:160, build:14}, // Air Defense System plant
+  adsPlant:{food:40, oil:80, iron:160, build:14},
 
   // Units (trainTime sec)
   infantry:{food:20, oil:0, iron:0, train:4, from:'barracks', icon:'🪖'},
@@ -137,7 +155,7 @@ const COST={
   abrams:{food:0, oil:40, iron:120, train:8, from:'vehicleFactory', icon:'🛡️'},
   leopard2:{food:0, oil:40, iron:115, train:8, from:'vehicleFactory', icon:'🛡️'},
   himars:{food:0, oil:80, iron:100, train:9, from:'missileLab', icon:'🎯'},
-  patriot:{food:0, oil:60, iron:140, train:10, from:'adsPlant', icon:'🛰️'}, // immobile SAM
+  patriot:{food:0, oil:60, iron:140, train:10, from:'adsPlant', icon:'🛰️'},
   f16:{food:0, oil:120, iron:80, train:10, from:'airbase', icon:'🛩️'},
   su34:{food:0, oil:160, iron:120, train:12, from:'airbase', icon:'🛫'},
 };
@@ -394,7 +412,7 @@ function aiUpdate(dt){
     if(k==='f16') src='airbase';
     const b=buildings.find(x=>x.side===Side.AI && x.btype===src && !x.underConstruction);
     if(!b) return;
-    // AI cheats a tiny bit: no cost (sade)
+    // AI cheats a tiny bit: no cost
     units.push(new Unit({x:b.x+rand(8)-4,y:b.y+rand(8)-4,kind:k,side:Side.AI}));
   };
   if(Math.random()<0.7) pick();
@@ -483,7 +501,6 @@ function unitUpdate(u, dt){
 
 function destroy(e,killer){
   e.dead=true;
-  // remove from arrays on sweep
   if(killer) log(`${killer.side===Side.PLAYER?'Bizim':'AI'} ${labelEnt(killer)} → ${labelEnt(e)} yok etti.`);
 }
 
@@ -515,30 +532,33 @@ function init(){
   units.push(new Unit({x:WORLD.w*0.25+90,y:WORLD.h*0.75+20,kind:'abrams',side:Side.PLAYER}));
 
   aiInit();
-  updateHUD(); hint('Hazır: Bina kur, birim üret, sağ tıkla yönet.');
-  selfTests();
+  updateHUD();
 }
 init();
 
 // ====== Render ======
 function draw(){
+  // arka planı temizleyip uydu haritasını çiz
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(worldReady){
+    drawImageCover(worldImg);
+  } else {
+    // yüklenme anında koyu fonda beklet
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
 
-  // subtle grid is via CSS; draw entities
-  // draw buildings
+  // binalar
   for(const b of buildings){
     if(b.dead) continue;
     const r=16;
-    // base shape
     ctx.save();
     ctx.translate(b.x,b.y);
     ctx.fillStyle = b.side===Side.PLAYER ? 'rgba(16,185,129,.95)' : 'rgba(96,165,250,.95)';
     ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.lineWidth=3;
     ctx.beginPath(); ctx.roundRect(-r,-r, r*2, r*2, 6); ctx.fill(); ctx.stroke();
-    // icon
     ctx.fillStyle='#081017'; ctx.font='14px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(bIcon(b.btype),0,0);
-    // HP bar
     const max = b.isBase? 1000 : 500;
     const pct=Math.max(0,Math.min(1,b.hp/max));
     ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(-22, r+6, 44, 4);
@@ -547,7 +567,6 @@ function draw(){
     if(b.sel){
       ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=2; ctx.strokeRect(-r-3,-r-3,(r*2)+6,(r*2)+6);
     }
-    // under construction
     if(b.underConstruction){
       const p=Math.min(1,b.elapsed/(b.buildTime||10));
       ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(-22, -r-8, 44, 4);
@@ -556,7 +575,7 @@ function draw(){
     ctx.restore();
   }
 
-  // draw units
+  // üniteler
   for(const u of units){
     if(u.dead) continue;
     const r=10;
@@ -564,33 +583,27 @@ function draw(){
     ctx.fillStyle = u.side===Side.PLAYER ? 'rgba(16,185,129,.95)' : 'rgba(96,165,250,.95)';
     ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
     ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.stroke();
-    // icon text
     ctx.fillStyle='#081017'; ctx.font='12px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(uIcon(u.kind),0,0);
-
-    // HP bar
     const max=STATS[u.kind].hp; const pct=Math.max(0,Math.min(1,u.hp/max));
     ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(-18, r+5, 36, 3);
     ctx.fillStyle= pct<.33? '#ef4444' : pct<.66? '#f59e0b' : '#22c55e';
     ctx.fillRect(-18, r+5, 36*pct, 3);
-
     if(u.sel){
-      // selection ring
       ctx.strokeStyle='rgba(255,255,255,.8)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,r+4,0,Math.PI*2); ctx.stroke();
-      // range ring
       ctx.strokeStyle='rgba(253,224,71,.9)'; ctx.fillStyle='rgba(253,224,71,.08)'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.arc(0,0,u.range,0,Math.PI*2); ctx.fill(); ctx.stroke();
     }
     ctx.restore();
   }
 
-  // shots
+  // atış efektleri
   for(const s of shots){
     ctx.strokeStyle='#fde047'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke();
   }
 
-  // selection rectangle
+  // seçim kutusu
   if(mouse.down && mouse.drag){
     ctx.strokeStyle='rgba(147,197,253,.9)'; ctx.setLineDash([5,4]); ctx.lineWidth=1;
     ctx.fillStyle='rgba(59,130,246,.15)';
@@ -621,19 +634,15 @@ function loop(now){
   const dt = Math.min(0.05, (now-last)/1000) * timeScale; last=now;
   // build timers
   for(const b of buildings){ if(b.underConstruction){ b.elapsed+=dt; if(b.elapsed>=b.buildTime){ b.underConstruction=false; log(`✅ ${labelOfBuild(b.btype)} tamamlandı`);} } }
-
   // update units
   for(const u of units){ if(!u.dead) unitUpdate(u, dt); }
-
   // cleanup dead
   sweep();
-
   // shots lifespan
   for(let i=shots.length-1;i>=0;i--){ shots[i].t-=dt; if(shots[i].t<=0) shots.splice(i,1); }
-
   // economy + ai
   econUpdate(dt); aiUpdate(dt);
-
+  // draw
   draw();
   requestAnimationFrame(loop);
 }
@@ -648,17 +657,16 @@ function sweep(){
 function selfTests(){
   console.group('%cSelf-Tests','color:#10b981;font-weight:bold');
   try{
-    // stats completeness
     Object.keys(PROD_BY_BUILD).forEach(b=>{
       PROD_BY_BUILD[b].forEach(k=>{ console.assert(STATS[k], 'STAT yok:', k); console.assert(COST[k], 'COST yok:', k); });
     });
-    // produce feasibility
     const bb=buildings.find(x=>x.side===Side.PLAYER && x.btype==='barracks');
     console.assert(!!bb,'Player kışla var');
     console.log('✅ Tests OK');
   }catch(e){ console.error('❌ Test hata', e); }
   console.groupEnd();
 }
+selfTests();
 
 // ====== End ======
 })();
