@@ -3,50 +3,51 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>GLOBAL RTS — Online (20×20)</title>
+<title>GLOBAL RTS — Online (20x20 Grid)</title>
 
 <!-- Tailwind (CDN) -->
 <script src="https://cdn.tailwindcss.com"></script>
-<!-- Google Font -->
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
 
-<!-- Firebase v10 compat -->
+<!-- Firebase v10 compat (basit kullanım için) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
 <style>
   :root{
-    --bg:#0b1020; --panel:#0f172a; --muted:#1e293b; --text:#e6edf6; --accent:#60a5fa;
-    --land:#173b2b; --land2:#1e4d36; --desert:#7d6f3a; --desert2:#9a8a4a; --water:#0e2a45; --water2:#12375a; --bridge:#6a7687;
-    --grid:#1c2742; --beam:#fb923c; --beamGlow:#ffedd5;
+    --bg:#0a0f1a; --panel:#0f172a; --muted:#1e293b; --text:#e5ecf6;
+    --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; --accent:#60a5fa; --beam:#fb923c80;
+    --land:#1b3b2b; --desert:#7c6a30; --water:#0d2a43; --bridge:#5b6470; --grid:#1b2540;
   }
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Montserrat,system-ui,Segoe UI,Roboto,Arial}
-  #app{height:100%;display:grid;grid-template-rows:auto 1fr}
-  header{background:linear-gradient(180deg,rgba(15,23,42,.95),rgba(2,8,23,.9)); border-bottom:1px solid #1f2a44; backdrop-filter: blur(6px)}
-  .panel{background:linear-gradient(180deg,rgba(17,24,39,.96),rgba(2,8,23,.92)); border:1px solid #233; box-shadow:0 8px 30px rgba(0,0,0,.25); backdrop-filter: blur(6px)}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+  #game{height:100%;display:grid;grid-template-rows:auto 1fr}
+  /* Canvas alanı */
+  #board{position:relative; overflow:hidden; background:#0b1220}
+  canvas{display:block; image-rendering:pixelated;}
+  /* Hücre overlay tıklama yakalayıcı (performans için tek canvas kullanıyoruz, ama UI için pointer overlay) */
+  #overlay{position:absolute; inset:0; cursor:default}
+  /* UI bileşenleri */
+  .panel{background:linear-gradient(180deg,rgba(17,24,39,.9),rgba(2,8,23,.9)); border:1px solid #233; box-shadow:0 8px 30px rgba(0,0,0,.25); backdrop-filter: blur(6px)}
   .chip{background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08)}
   .btn{background:linear-gradient(180deg,#0ea5e9,#0369a1); border:1px solid #1e3a8a}
-  .btn-ghost{background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1)}
-  /* Board */
-  #board{position:relative; height:calc(100vh - 58px); overflow:hidden}
-  canvas{display:block; image-rendering:pixelated}
-  #overlay{position:absolute; inset:0; cursor:default}
-  .beam{position:absolute; pointer-events:none; height:3px; background:linear-gradient(90deg,transparent,var(--beam),transparent); transform-origin:left center; filter: drop-shadow(0 0 6px var(--beam)); opacity:.95}
+  .btn:disabled{opacity:.5}
+  .btn-ghost{background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1)}
+  .ring-anim{animation:ringPulse 1.2s ease-out infinite}
+  @keyframes ringPulse { 0%{box-shadow:0 0 0 0 rgba(96,165,250,.6)} 100%{box-shadow:0 0 0 16px rgba(96,165,250,0)} }
+  /* Turuncu lazer çizgisi */
+  .beam{position:absolute; pointer-events:none; height:3px; background:linear-gradient(90deg,transparent,#fb923c,transparent); transform-origin:left center; filter: drop-shadow(0 0 6px #fb923c); opacity:.95}
   /* Minimap */
-  #minimap{position:absolute; right:14px; bottom:14px; width:220px; height:220px; border:1px solid #334155; background:#0b1322; image-rendering:pixelated; border-radius:10px}
-  /* Tooltip */
-  .tip{position:absolute; pointer-events:none; background:#0b1322; border:1px solid #334155; padding:.4rem .5rem; font-size:.75rem; border-radius:.5rem; white-space:nowrap}
-  /* Modal */
-  #modal{background:radial-gradient(1200px 800px at 50% 30%, rgba(96,165,250,.15), transparent 60%) rgba(0,0,0,.65)}
-  select option{background:#0b1322; color:#e6edf6}
+  #minimap{position:absolute; right:12px; bottom:12px; width:200px; height:200px; border:1px solid #334155; background:#0b1322; image-rendering:pixelated}
+  /* Flag select görünümü */
+  select option{background:#0b1322; color:#e5ecf6}
 </style>
 </head>
 <body>
-<div id="app">
-  <header class="px-4 py-2 flex items-center gap-3">
+<div id="game">
+  <!-- TOP BAR -->
+  <header class="panel px-4 py-2 flex items-center gap-3">
     <div class="flex items-center gap-2">
-      <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-400 to-indigo-600 shadow"></div>
+      <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-400 to-indigo-600"></div>
       <div class="font-bold tracking-wide">GLOBAL RTS</div>
       <div id="roomLabel" class="text-xs opacity-80 ml-2"></div>
       <div id="hostBadge" class="ml-2 text-xs px-2 py-0.5 rounded chip hidden">HOST</div>
@@ -58,39 +59,38 @@
       <div class="chip px-3 py-1.5 rounded flex items-center gap-2"><span>🛢️</span><span id="resOil">0</span></div>
       <div class="chip px-3 py-1.5 rounded flex items-center gap-2"><span>⚡</span><span id="resPower">0</span></div>
       <button id="openBuild" class="btn-ghost px-3 py-1.5 rounded">İnşa Et (B)</button>
-      <button id="openTrain" class="btn-ghost px-3 py-1.5 rounded">Birim (U)</button>
+      <button id="openTrain" class="btn-ghost px-3 py-1.5 rounded">Birim Üret (U)</button>
       <button id="centerBase" class="btn-ghost px-3 py-1.5 rounded">Üssü Ortala</button>
     </div>
   </header>
 
+  <!-- BOARD -->
   <div id="board">
-    <canvas id="world"></canvas>
+    <canvas id="world" width="1400" height="900"></canvas>
     <div id="overlay"></div>
-    <canvas id="minimap" width="220" height="220"></canvas>
-
+    <canvas id="minimap" width="200" height="200"></canvas>
     <!-- Build Panel -->
-    <div id="buildPanel" class="panel absolute left-3 top-16 w-[22rem] rounded-xl p-3 hidden">
+    <div id="buildPanel" class="panel absolute left-3 top-16 w-80 rounded-xl p-3 hidden">
       <div class="font-semibold mb-2">İnşaat (Hücre başına max 2)</div>
       <div id="buildList" class="grid grid-cols-2 gap-2 text-sm"></div>
+      <div class="mt-2 text-xs opacity-80">Deniz hücrelerine sadece köprü, savunma vb. uygun yapılar kurulabilir.</div>
     </div>
     <!-- Train Panel -->
-    <div id="trainPanel" class="panel absolute left-3 top-16 w-[28rem] rounded-xl p-3 hidden">
+    <div id="trainPanel" class="panel absolute left-3 top-16 w-[26rem] rounded-xl p-3 hidden">
       <div class="font-semibold mb-2">Birim Üret</div>
       <div id="unitList" class="grid grid-cols-3 gap-2 text-xs"></div>
+      <div class="mt-2 text-xs opacity-80">Üretim: ilgili fabrikanın yanındaki hücreye çıkar.</div>
     </div>
-    <!-- Hover Tooltip -->
-    <div id="tooltip" class="tip hidden"></div>
-    <!-- Status -->
+    <!-- Status / Error -->
     <div id="status" class="panel absolute right-3 top-16 max-w-md rounded-xl p-3 text-sm"></div>
   </div>
 </div>
 
-<!-- MODAL -->
-<div id="modal" class="fixed inset-0 flex items-center justify-center z-50">
-  <div class="panel w-[600px] rounded-2xl p-5">
+<!-- MODAL: Login & Oda -->
+<div id="modal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+  <div class="panel w-[560px] rounded-2xl p-5">
     <div class="text-xl font-bold mb-1">GLOBAL RTS — Online</div>
     <div class="text-sm opacity-80 mb-4">İsmini ve bayrağını seç, oda oluştur ya da ID ile katıl.</div>
-
     <div class="grid grid-cols-3 gap-3">
       <div class="col-span-2">
         <label class="text-sm">İsmin</label>
@@ -99,10 +99,22 @@
       <div>
         <label class="text-sm">Bayrak</label>
         <select id="playerFlag" class="w-full mt-1 px-3 py-2 rounded bg-slate-900/60 border border-slate-700">
-          <option>🇹🇷 Türkiye</option><option>🇺🇸 USA</option><option>🇬🇧 UK</option><option>🇩🇪 Almanya</option>
-          <option>🇫🇷 Fransa</option><option>🇪🇸 İspanya</option><option>🇷🇺 Rusya</option><option>🇮🇳 Hindistan</option>
-          <option>🇨🇳 Çin</option><option>🇯🇵 Japonya</option><option>🇧🇷 Brezilya</option><option>🇸🇦 Suudi Arabistan</option>
-          <option>🇮🇷 İran</option><option>🇮🇶 Irak</option><option>🇦🇿 Azerbaycan</option><option>🇺🇦 Ukrayna</option>
+          <option>🇹🇷 Türkiye</option>
+          <option>🇺🇸 USA</option>
+          <option>🇬🇧 UK</option>
+          <option>🇩🇪 Almanya</option>
+          <option>🇫🇷 Fransa</option>
+          <option>🇪🇸 İspanya</option>
+          <option>🇷🇺 Rusya</option>
+          <option>🇮🇳 Hindistan</option>
+          <option>🇨🇳 Çin</option>
+          <option>🇯🇵 Japonya</option>
+          <option>🇧🇷 Brezilya</option>
+          <option>🇸🇦 Suudi Arabistan</option>
+          <option>🇮🇷 İran</option>
+          <option>🇮🇶 Irak</option>
+          <option>🇦🇿 Azerbaycan</option>
+          <option>🇺🇦 Ukrayna</option>
         </select>
       </div>
     </div>
@@ -119,21 +131,21 @@
     </div>
 
     <div class="mt-3 text-xs opacity-70">
-      İpucu: İlk giren “HOST” olur. Host çıkarsa otomatik yeni host atanır.
+      İpucu: Arkadaşlarınla aynı Oda ID’sini paylaş. İlk giren “HOST” olur; host ayrılırsa otomatik yeni host seçilir.
     </div>
   </div>
 </div>
 
 <script>
 /* =======================
-   Firebase Config
+   Firebase — Config
 ======================= */
 const firebaseConfig = {
   apiKey: "AIzaSyCV609XeHMtmZtD3FZDJ0cQnDiXke4YlUs",
   authDomain: "globalrts-ea3b4.firebaseapp.com",
-  databaseURL: "https://globalrts-ea3b4-default-rtdb.firebaseio.com", // KONSOLUNUZDAN DOĞRULAYIN
+  databaseURL: "https://globalrts-ea3b4-default-rtdb.firebaseio.com",
   projectId: "globalrts-ea3b4",
-  storageBucket: "globalrts-ea3b4.appspot.com", // düzeltilmiş
+  storageBucket: "globalrts-ea3b4.firebasestorage.app",
   messagingSenderId: "404807030737",
   appId: "1:404807030737:web:2efecfef884db0b58632f0",
   measurementId: "G-Q5YKGP8EXR"
@@ -143,135 +155,145 @@ const auth = firebase.auth();
 const db = firebase.database();
 
 /* =======================
-   Kısa yardımcılar
+   Basit yardımcılar
 ======================= */
-const $ = s => document.querySelector(s);
+const $ = sel => document.querySelector(sel);
+const pad2 = n => n.toString().padStart(2,'0');
+const randId = (p='') => p + Math.random().toString(36).slice(2,8).toUpperCase();
 const now = () => Date.now();
+
 function toast(msg, type='info'){
   const box = $('#status');
-  const palette = type==='error'?'#fca5a5':(type==='warn'?'#fde68a':'#93c5fd');
-  box.innerHTML = `<div style="color:${palette}">${msg}</div>`;
-  setTimeout(()=>{ if(box.innerText===msg) box.innerHTML=''; }, 6000);
+  box.innerHTML = `<div class="text-${type==='error'?'red':'sky'}-300">${msg}</div>`;
+  setTimeout(()=>{ if(box.innerText===msg) box.innerHTML=''; }, 5000);
 }
-const randId = (p='') => p + Math.random().toString(36).slice(2,8).toUpperCase();
 
 /* =======================
-   Oyun Sabitleri
+   Oyun sabitleri
 ======================= */
-const GRID = 20;                // 20×20 = 400 hücre
-const CELL = 56;                // görsel çözünürlük
-const WORLD_W = GRID * CELL;
-const WORLD_H = GRID * CELL;
-const TICK_MS = 100;
+const GRID = 20;                   // 20x20 = 400 hücre
+const CELL = 42;                   // piksel (çizim ölçeği)
+const WIDTH = GRID*CELL;
+const HEIGHT= GRID*CELL;
+const TICK_MS = 100;               // 10 Hz
+const FOG = false;                 // sis kapalı (örnek)
 const MAX_BUILD_PER_CELL = 2;
+
+// Kaynaklar
 const RES = ["food","iron","gold","oil","power"];
 
-/* İkonlu Binalar */
+// Binalar (adı, kodu, maliyet, gelir/dk, can, kurulum kısıtı, üretim/işlev)
 const BUILDINGS = [
-  {name:"Üs Merkezi", code:"HQ",   icon:"🏯", tint:"#cbd5e1", cost:{food:100,iron:100,gold:100,oil:0,power:0}, hp:3200, income:{}, place:'land', unique:true},
-  {name:"Değirmen", code:"MILL",   icon:"🌾", tint:"#86efac", cost:{food:50,iron:10,gold:0,oil:0,power:5}, hp:800, income:{food:30}, place:'land'},
-  {name:"Demir Madeni", code:"IMINE",icon:"⛏️", tint:"#93c5fd", cost:{food:20,iron:0,gold:0,oil:0,power:10}, hp:900, income:{iron:25}, place:'land'},
-  {name:"Altın Madeni", code:"GMINE",icon:"🪙", tint:"#fde68a", cost:{food:30,iron:10,gold:0,oil:0,power:10}, hp:900, income:{gold:15}, place:'land'},
-  {name:"Rafineri", code:"REF",   icon:"🏭", tint:"#fca5a5", cost:{food:20,iron:30,gold:10,oil:0,power:20}, hp:1000, income:{oil:20}, place:'land'},
-  {name:"Jeneratör", code:"POW",  icon:"⚡",  tint:"#a5b4fc", cost:{food:10,iron:30,gold:10,oil:10,power:0}, hp:900, income:{power:30}, place:'land'},
-  {name:"Kışla", code:"BARR",     icon:"🪖", tint:"#93c5fd", cost:{food:60,iron:40,gold:20,oil:0,power:10}, hp:1200, income:{}, place:'land', trains:["INF","MG","MORTAR"]},
-  {name:"Tank Fabrikası", code:"TFACT", icon:"🛠️", tint:"#fbbf24", cost:{food:40,iron:120,gold:80,oil:40,power:30}, hp:1400, income:{}, place:'land', trains:["MBT","IFV","APC","SPG","LAV"]},
-  {name:"Füze Fabrikası", code:"MFACT", icon:"🎯", tint:"#f472b6", cost:{food:40,iron:120,gold:120,oil:60,power:40}, hp:1400, income:{}, place:'land', trains:["MLRS","ATGM","SAM"]},
-  {name:"Hava Üssü", code:"AIRB", icon:"🛫", tint:"#60a5fa", cost:{food:60,iron:140,gold:160,oil:120,power:60}, hp:1600, income:{}, place:'land', trains:["FTR","BMB","HELI"]},
-  {name:"SİHA Merkezi", code:"UAVC", icon:"🛩️", tint:"#a78bfa", cost:{food:40,iron:60,gold:120,oil:80,power:40}, hp:1200, income:{}, place:'land', trains:["UAV","UCAV"]},
-  {name:"Hava Savunma", code:"AADF", icon:"🛡️", tint:"#67e8f9", cost:{food:30,iron:100,gold:80,oil:40,power:40}, hp:1200, income:{}, place:'land', trains:["AAA","SAM"]},
-  {name:"Duvar", code:"WALL",     icon:"🧱", tint:"#94a3b8", cost:{food:0,iron:20,gold:0,oil:0,power:0}, hp:1400, income:{}, place:'land|desert|bridge', blocks:true},
-  {name:"Köprü", code:"BRDG",     icon:"🌉", tint:"#e2e8f0", cost:{food:0,iron:40,gold:20,oil:0,power:0}, hp:1000, income:{}, place:'water', special:"bridge"}
+  {name:"Üs Merkezi", code:"HQ", cost:{food:100,iron:100,gold:100,oil:0,power:0}, hp:3000, income:{}, place:'land', unique:true},
+  {name:"Değirmen", code:"MILL", cost:{food:50,iron:10,gold:0,oil:0,power:5}, hp:800, income:{food:30}, place:'land'},
+  {name:"Demir Madeni", code:"IMINE", cost:{food:20,iron:0,gold:0,oil:0,power:10}, hp:900, income:{iron:25}, place:'land'},
+  {name:"Altın Madeni", code:"GMINE", cost:{food:30,iron:10,gold:0,oil:0,power:10}, hp:900, income:{gold:15}, place:'land'},
+  {name:"Rafineri", code:"REF", cost:{food:20,iron:30,gold:10,oil:0,power:20}, hp:1000, income:{oil:20}, place:'land'},
+  {name:"Güç Jeneratörü", code:"POW", cost:{food:10,iron:30,gold:10,oil:10,power:0}, hp:900, income:{power:30}, place:'land'},
+  {name:"Kışla", code:"BARR", cost:{food:60,iron:40,gold:20,oil:0,power:10}, hp:1200, income:{}, place:'land', trains:["INF","MG","MORTAR"]},
+  {name:"Tank Fabrikası", code:"TFACT", cost:{food:40,iron:120,gold:80,oil:40,power:30}, hp:1400, income:{}, place:'land', trains:["MBT","IFV","APC","SPG"]},
+  {name:"Füze Fabrikası", code:"MFACT", cost:{food:40,iron:120,gold:120,oil:60,power:40}, hp:1400, income:{}, place:'land', trains:["MLRS","ATGM","SAM"]},
+  {name:"Hava Üssü", code:"AIRB", cost:{food:60,iron:140,gold:160,oil:120,power:60}, hp:1600, income:{}, place:'land', trains:["FTR","BMB","HELI"]},
+  {name:"SİHA Merkezi", code:"UAVC", cost:{food:40,iron:60,gold:120,oil:80,power:40}, hp:1200, income:{}, place:'land', trains:["UAV","UCAV"]},
+  {name:"Hava Savunma Üretimi", code:"AADF", cost:{food:30,iron:100,gold:80,oil:40,power:40}, hp:1200, income:{}, place:'land', trains:["AAA","SAM"]},
+  {name:"Duvar", code:"WALL", cost:{food:0,iron:20,gold:0,oil:0,power:0}, hp:1200, income:{}, place:'land|desert|bridge', blocks:true},
+  {name:"Köprü", code:"BRDG", cost:{food:0,iron:40,gold:20,oil:0,power:0}, hp:1000, income:{}, place:'water', special:"bridge"}
 ];
 
-/* 15+ Birim (ikonlarla) */
+// 15+ Birim (isim, kod, kategori, hedef türü, can, hız, menzil (hücre), hasar/sn, maliyet)
 const UNITS = [
-  {name:"Piyade", code:"INF", icon:"🪖", cat:"ground", vs:["ground"], hp:110, spd:2.2, rng:3, dps:12, cost:{food:40,iron:10,gold:0,oil:0,power:0}},
-  {name:"MG Timi", code:"MG", icon:"🛡️", cat:"ground", vs:["ground"], hp:140, spd:1.8, rng:4, dps:18, cost:{food:50,iron:20,gold:0,oil:0,power:0}},
-  {name:"Havan", code:"MORTAR", icon:"🎯", cat:"ground", vs:["ground"], hp:140, spd:1.6, rng:6, dps:22, cost:{food:50,iron:30,gold:0,oil:0,power:0}},
-  {name:"APC", code:"APC", icon:"🚚", cat:"ground", vs:["ground"], hp:280, spd:3.1, rng:3, dps:16, cost:{food:30,iron:80,gold:10,oil:20,power:0}},
-  {name:"IFV", code:"IFV", icon:"🚙", cat:"ground", vs:["ground","air"], hp:320, spd:2.8, rng:4, dps:22, cost:{food:40,iron:100,gold:20,oil:30,power:0}},
-  {name:"Ana Muharebe Tankı", code:"MBT", icon:"🛡️", cat:"ground", vs:["ground"], hp:560, spd:2.4, rng:5, dps:35, cost:{food:50,iron:160,gold:80,oil:60,power:0}},
-  {name:"Kundağı Motorlu Obüs", code:"SPG", icon:"🧨", cat:"ground", vs:["ground"], hp:420, spd:2.2, rng:8, dps:40, cost:{food:60,iron:140,gold:80,oil:50,power:0}},
-  {name:"ÇNRS", code:"MLRS", icon:"🚀", cat:"ground", vs:["ground"], hp:400, spd:2.0, rng:9, dps:50, cost:{food:60,iron:140,gold:120,oil:60,power:0}},
-  {name:"ATGM", code:"ATGM", icon:"🎯", cat:"ground", vs:["ground"], hp:160, spd:1.6, rng:6, dps:32, cost:{food:40,iron:60,gold:40,oil:0,power:0}},
-  {name:"Uçaksavar", code:"AAA", icon:"🛰️", cat:"ground", vs:["air"], hp:280, spd:1.6, rng:5, dps:34, cost:{food:30,iron:80,gold:40,oil:0,power:10}},
-  {name:"SAM", code:"SAM", icon:"🎯", cat:"ground", vs:["air"], hp:380, spd:1.6, rng:8, dps:45, cost:{food:40,iron:120,gold:80,oil:30,power:20}},
-  {name:"Taarruz Helikopteri", code:"HELI", icon:"🚁", cat:"air", vs:["ground"], hp:360, spd:4.0, rng:5, dps:38, cost:{food:60,iron:100,gold:120,oil:80,power:30}},
-  {name:"Avcı Uçak", code:"FTR", icon:"✈️", cat:"air", vs:["air"], hp:340, spd:4.6, rng:6, dps:44, cost:{food:60,iron:120,gold:160,oil:100,power:40}},
-  {name:"Bombardıman", code:"BMB", icon:"💣", cat:"air", vs:["ground"], hp:500, spd:4.0, rng:7, dps:55, cost:{food:80,iron:160,gold:200,oil:140,power:60}},
-  {name:"Keşif SİHA", code:"UAV", icon:"🛩️", cat:"air", vs:[], hp:130, spd:3.8, rng:0, dps:0, cost:{food:20,iron:20,gold:60,oil:20,power:10}},
-  {name:"Silahlı SİHA", code:"UCAV", icon:"🛩️", cat:"air", vs:["ground"], hp:240, spd:3.6, rng:6, dps:32, cost:{food:30,iron:60,gold:100,oil:40,power:20}},
-  {name:"Hafif Zırhlı", code:"LAV", icon:"🚙", cat:"ground", vs:["ground"], hp:240, spd:3.4, rng:3, dps:18, cost:{food:30,iron:80,gold:20,oil:20,power:0}}
+  {name:"Piyade", code:"INF", cat:"ground",  vs:["ground"], hp:100,  spd:2.2, rng:3, dps:12, cost:{food:40,iron:10,gold:0,oil:0,power:0}},
+  {name:"MG Timi", code:"MG", cat:"ground",   vs:["ground"], hp:120,  spd:1.8, rng:4, dps:18, cost:{food:50,iron:20,gold:0,oil:0,power:0}},
+  {name:"Havan", code:"MORTAR", cat:"ground", vs:["ground"], hp:120,  spd:1.6, rng:6, dps:22, cost:{food:50,iron:30,gold:0,oil:0,power:0}},
+  {name:"APC", code:"APC", cat:"ground",      vs:["ground"], hp:260,  spd:3.1, rng:3, dps:16, cost:{food:30,iron:80,gold:10,oil:20,power:0}},
+  {name:"IFV", code:"IFV", cat:"ground",      vs:["ground","air"], hp:300, spd:2.8, rng:4, dps:22, cost:{food:40,iron:100,gold:20,oil:30,power:0}},
+  {name:"Ana Muharebe Tankı", code:"MBT", cat:"ground", vs:["ground"], hp:520, spd:2.4, rng:5, dps:35, cost:{food:50,iron:160,gold:80,oil:60,power:0}},
+  {name:"Kundağı Motorlu Obüs", code:"SPG", cat:"ground", vs:["ground"], hp:400, spd:2.2, rng:8, dps:40, cost:{food:60,iron:140,gold:80,oil:50,power:0}},
+  {name:"Çok Namlulu Roket", code:"MLRS", cat:"ground", vs:["ground"], hp:380, spd:2.0, rng:9, dps:50, cost:{food:60,iron:140,gold:120,oil:60,power:0}},
+  {name:"ATGM Timi", code:"ATGM", cat:"ground", vs:["ground"], hp:140, spd:1.6, rng:6, dps:32, cost:{food:40,iron:60,gold:40,oil:0,power:0}},
+  {name:"Uçaksavar Topu", code:"AAA", cat:"ground", vs:["air"], hp:260, spd:1.6, rng:5, dps:34, cost:{food:30,iron:80,gold:40,oil:0,power:10}},
+  {name:"SAM Bataryası", code:"SAM", cat:"ground", vs:["air"], hp:360, spd:1.6, rng:8, dps:45, cost:{food:40,iron:120,gold:80,oil:30,power:20}},
+  {name:"Taarruz Helikopteri", code:"HELI", cat:"air", vs:["ground"], hp:340, spd:4.0, rng:5, dps:38, cost:{food:60,iron:100,gold:120,oil:80,power:30}},
+  {name:"Avcı Uçak", code:"FTR", cat:"air", vs:["air"], hp:320, spd:4.6, rng:6, dps:44, cost:{food:60,iron:120,gold:160,oil:100,power:40}},
+  {name:"Bombardıman", code:"BMB", cat:"air", vs:["ground"], hp:480, spd:4.0, rng:7, dps:55, cost:{food:80,iron:160,gold:200,oil:140,power:60}},
+  {name:"Keşif SİHA", code:"UAV", cat:"air", vs:[], hp:120, spd:3.8, rng:0, dps:0, cost:{food:20,iron:20,gold:60,oil:20,power:10}},
+  {name:"Silahlı SİHA", code:"UCAV", cat:"air", vs:["ground"], hp:220, spd:3.6, rng:6, dps:32, cost:{food:30,iron:60,gold:100,oil:40,power:20}},
+  {name:"Hafif Zırhlı", code:"LAV", cat:"ground", vs:["ground"], hp:220, spd:3.4, rng:3, dps:18, cost:{food:30,iron:80,gold:20,oil:20,power:0}}
 ];
+// kod -> obje erişimi
 const UNIT_BY_CODE = Object.fromEntries(UNITS.map(u=>[u.code,u]));
 
-/* =======================
-   Global Durum
-======================= */
-let me = {uid:null,name:'',flag:'',roomId:null,isHost:false};
-let roomRef=null, metaRef=null, mapRef=null, unitsRef=null, buildingsRef=null, playersRef=null, cmdRef=null;
+// Basit renk atamaları (birim ikonları için)
+const UNIT_COLOR = {
+  ground:"#7dd3fc", air:"#c084fc", wall:"#94a3b8"
+};
 
+/* =======================
+   Global state
+======================= */
+let me = {uid:null, name:"", flag:"", roomId:null, isHost:false};
+let roomRef=null, metaRef=null, mapRef=null, unitsRef=null, buildingsRef=null, playersRef=null, cmdRef=null;
+let game = {
+  map: [],                 // terrain: 'land'|'desert'|'water' + bridge bool
+  players:{},              // uid -> info
+  units:{},                // id -> unit
+  buildings:{},            // id -> building
+  resources:{},            // uid -> {food,iron,gold,oil,power}
+  lastTick: 0,
+  mySelection: null,       // unit id
+  cam:{x:0,y:0,zoom:1},
+  hostHeartbeat:0
+};
+// Kanvas
 const canvas = $('#world');
+canvas.width = WIDTH;
+canvas.height= HEIGHT;
 const ctx = canvas.getContext('2d');
 const overlay = $('#overlay');
 const mmin = $('#minimap');
 const mctx = mmin.getContext('2d');
-const tooltip = $('#tooltip');
 
-let DPR = window.devicePixelRatio||1;
-function resize(){
-  const rect = $('#board').getBoundingClientRect();
-  canvas.style.width = rect.width+'px';
-  canvas.style.height= rect.height+'px';
-  canvas.width = Math.floor(rect.width * DPR);
-  canvas.height= Math.floor(rect.height* DPR);
-}
-window.addEventListener('resize', resize);
-resize();
+// Pan/zoom
+let isPanning=false, panStart=null;
+overlay.addEventListener('mousedown', e=>{
+  if(e.button===1){ // orta
+    isPanning=true; panStart={x:e.clientX, y:e.clientY, cx:game.cam.x, cy:game.cam.y};
+  }
+});
+overlay.addEventListener('mousemove', e=>{
+  if(isPanning){
+    const dx=e.clientX-panStart.x, dy=e.clientY-panStart.y;
+    game.cam.x = Math.max(0, Math.min(WIDTH - widthOnScreen(), panStart.cx - dx/game.cam.zoom));
+    game.cam.y = Math.max(0, Math.min(HEIGHT- heightOnScreen(), panStart.cy - dy/game.cam.zoom));
+  }
+});
+overlay.addEventListener('mouseup', ()=>{isPanning=false});
+overlay.addEventListener('mouseleave', ()=>{isPanning=false});
+overlay.addEventListener('wheel', e=>{
+  const z = game.cam.zoom * (e.deltaY>0 ? 0.9 : 1.1);
+  game.cam.zoom = Math.max(.6, Math.min(2.2, z));
+  e.preventDefault();
+},{passive:false});
 
-let game = {
-  map: [],
-  players:{},
-  units:{},
-  buildings:{},
-  resources:{},
-  cam:{x:0,y:0,zoom:1},
-  mySelection:null,
-  _incomeAcc:0,
-  hostHeartbeat:0
-};
+// Sağ tık menüsü kapat
+overlay.addEventListener('contextmenu', e=>e.preventDefault());
+
+function widthOnScreen(){ return canvas.clientWidth / game.cam.zoom }
+function heightOnScreen(){ return canvas.clientHeight / game.cam.zoom }
 
 /* =======================
-   Harita Üretimi (doku + kıyı)
+   Oda akışı ve Firebase
 ======================= */
-function roomSeed(roomId){ let h=0; for(const c of roomId) h=(h*31 + c.charCodeAt(0))>>>0; return h; }
-function seededRandom(seed){ return function(){ let t= seed+=0x6D2B79F5; t=Math.imul(t^t>>>15,t|1); t^= t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; } }
-function genMap(roomId){
-  const rnd = seededRandom(roomSeed(roomId));
-  const map=[];
-  const seaBand = Math.floor(GRID*(0.35 + rnd()*0.15));
-  for(let y=0;y<GRID;y++){
-    map[y]=[];
-    for(let x=0;x<GRID;x++){
-      let t='land';
-      if (y>=seaBand-2 && y<=seaBand+1) t='water';
-      if (t==='land' && rnd()<0.16) t='desert';
-      map[y][x]={t, bridge:false, builds:0};
-    }
+async function signInAnon(){
+  try{
+    const cred = await auth.signInAnonymously();
+    me.uid = cred.user.uid;
+    console.log('Signed in:', me.uid);
+  }catch(err){
+    console.error(err);
+    toast('Auth hata: '+err.message,'error');
   }
-  // köprü koridorları
-  for(let x=2;x<GRID-2;x+=4){
-    const by = seaBand + ((x%8===0)?0:1);
-    if(map[by] && map[by][x]) { map[by][x].bridge=true; map[by][x].t='water'; }
-  }
-  return map;
 }
-function cellTerrainStr(c){ return c.bridge ? 'bridge' : c.t; }
-
-/* =======================
-   Firebase Oda
-======================= */
 function roomRefs(roomId){
   roomRef = db.ref('rooms/'+roomId);
   metaRef = roomRef.child('meta');
@@ -281,49 +303,87 @@ function roomRefs(roomId){
   playersRef= roomRef.child('players');
   cmdRef = roomRef.child('commands');
 }
-async function signInAnon(){
-  if(auth.currentUser) return auth.currentUser;
-  try{
-    const cred = await auth.signInAnonymously();
-    me.uid = cred.user.uid;
-    return cred.user;
-  }catch(e){ toast('Auth hata: '+e.message,'error'); throw e; }
+function roomSeed(roomId){
+  // deterministik seed
+  let h=0; for(const c of roomId) h = (h*31 + c.charCodeAt(0))>>>0;
+  return h;
 }
-
-/* =======================
-   Ekonomi ve Maliyetler
-======================= */
-function resStr(cost){ return `🍞${cost.food||0} ⛏️${cost.iron||0} 🪙${cost.gold||0} 🛢️${cost.oil||0} ⚡${cost.power||0}`; }
-function pay(cost, uid=me.uid){
-  const r = game.resources[uid];
-  for(const k of RES){ if((cost[k]||0) > (r[k]||0)) return false; }
-  for(const k of RES){ r[k] -= (cost[k]||0); }
-  playersRef.child(uid).child('res').set(r);
-  return true;
+function seededRandom(seed){ // mulberry32
+  return function(){
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ t>>>15, t | 1);
+    t ^= t + Math.imul(t ^ t>>>7, t | 61);
+    return ((t ^ t>>>14) >>> 0) / 4294967296;
+  }
 }
-
-/* =======================
-   İnşa & Birim Üretimi
-======================= */
+function genMap(roomId){
+  const rnd = seededRandom(roomSeed(roomId));
+  const map=[];
+  // desen: orta-büyük bir deniz şeridi + çöl cepleri + köprüler
+  const seaBand = Math.floor(GRID* (0.35 + rnd()*0.15)); // yatay deniz bandı satırı
+  for(let y=0;y<GRID;y++){
+    map[y]=[];
+    for(let x=0;x<GRID;x++){
+      let t='land';
+      if (y>=seaBand-2 && y<=seaBand+1) t='water';
+      if (t==='land' && rnd()<0.18) t='desert';
+      map[y][x]={t, bridge:false, builds:0};
+    }
+  }
+  // köprü koridorları
+  for(let x=2;x<GRID-2;x+=4){
+    const by = seaBand + ((x%8===0)?0:1);
+    if(by>=0 && by<GRID){
+      if(map[by]) map[by][x] && (map[by][x].bridge=true, map[by][x].t='water');
+    }
+  }
+  return map;
+}
+function cellTerrainStr(c){
+  if(c.bridge) return 'bridge';
+  return c.t;
+}
 function canPlace(buildCode, tx, ty){
   const b = BUILDINGS.find(b=>b.code===buildCode);
-  const cell = game.map?.[ty]?.[tx];
+  const cell = game.map[ty]?.[tx];
   if(!b || !cell) return false;
   if(cell.builds >= MAX_BUILD_PER_CELL) return false;
+  // Arazi kısıtı
+  const place = b.place; // 'land' | 'water' | 'land|desert|bridge'
   const terr = cellTerrainStr(cell);
-  if(b.place.includes('|')){
-    if(!b.place.split('|').includes(terr)) return false;
-  }else{
-    if(b.place==='land' && terr==='water') return false;
-    if(b.place==='water' && terr!=='water') return false;
+  if(place.includes('|')){
+    if(!place.split('|').includes(terr)) return false;
+  } else {
+    if(place==='land' && terr==='desert') return true; // çöl de kara olarak kabul
+    if(place!=='land' && terr==='desert' && place!=='desert') return false;
+    if(place!=='land' && terr==='land') return false;
+    if(place==='land' && (terr==='water')) return false;
+    if(place==='water' && terr!=='water') return false;
   }
   return true;
 }
+function pay(cost, uid=me.uid){
+  const r = game.resources[uid];
+  for(const k of RES){ if((cost[k]||0) > (r[k]||0)) return false; }
+  for(const k of RES){ r[k] = (r[k]||0) - (cost[k]||0); }
+  playersRef.child(uid).child('res').set(r);
+  return true;
+}
+function addIncome(uid, inc){
+  const r = game.resources[uid]; for(const k of RES){ r[k]=(r[k]||0)+(inc[k]||0); }
+}
+
+/* =======================
+   Oyun nesneleri
+======================= */
+function cellKey(x,y){ return x+'_'+y }
 function spawnBuilding(uid, code, x,y){
   const id='B_'+randId();
   const def = BUILDINGS.find(b=>b.code===code);
   const obj={id, owner:uid, code, x, y, hp:def.hp, t:now()};
+  // hücre sayaç
   game.map[y][x].builds++;
+  // kayıt
   buildingsRef.child(id).set(obj);
   return id;
 }
@@ -334,25 +394,78 @@ function spawnUnit(uid, code, x,y){
   unitsRef.child(id).set(obj);
   return id;
 }
+function delUnit(id){ unitsRef.child(id).remove(); }
+function delBuilding(id){ buildingsRef.child(id).remove(); }
 
 /* =======================
-   Komutlar (Host işler)
+   Komut sistemi (host işler)
 ======================= */
 async function pushCommand(cmd){
   const ref = cmdRef.child(me.uid).push();
   await ref.set({...cmd, ts:firebase.database.ServerValue.TIMESTAMP});
 }
-function findFreeAround(x,y){
-  const dirs=[[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]];
-  for(const [dx,dy] of dirs){
-    const nx=x+dx, ny=y+dy;
-    if(nx<0||ny<0||nx>=GRID||ny>=GRID) continue;
-    const terr = game.map[ny][nx];
-    const block = Object.values(game.buildings).some(b=>b.x===nx && b.y===ny && BUILDINGS.find(bb=>bb.code===b.code).blocks);
-    const occ   = Object.values(game.units).some(u=>u.x===nx && u.y===ny);
-    if(!block && !occ && terr.t!=='water') return {x:nx,y:ny};
+async function hostLoop(){
+  // heartbeat
+  await metaRef.child('hostHeartbeat').set(now());
+  // komutları topla
+  const snap = await cmdRef.get();
+  const cmds = [];
+  snap.forEach(user=>{
+    user.forEach(k=>{
+      cmds.push({...k.val(), _path:k.ref});
+    });
+  });
+  // işle
+  for(const c of cmds){
+    if(c.type==='build'){
+      const {uid, code, x,y}=c;
+      if(!canPlace(code,x,y)) { await c._path.remove(); continue; }
+      const def = BUILDINGS.find(b=>b.code===code);
+      if(!tryPayServer(uid, def.cost)) { await c._path.remove(); continue; }
+      spawnBuilding(uid, code, x,y);
+    }
+    if(c.type==='train'){
+      const {uid, code, nearX, nearY}=c;
+      const def=UNIT_BY_CODE[code];
+      if(!tryPayServer(uid, def.cost)){ await c._path.remove(); continue; }
+      // yakındaki boş bir hücreye çıkar
+      const pos = findFreeAround(nearX,nearY);
+      if(pos) spawnUnit(uid, code, pos.x, pos.y);
+    }
+    if(c.type==='order'){
+      const {uid, unitId, order}=c;
+      const u = game.units[unitId];
+      if(u && u.owner===uid){
+        unitsRef.child(unitId).child('order').set(order||null);
+      }
+    }
+    await c._path.remove();
   }
-  return null;
+  // ekonomi: her saniye kaynak ekle (daha yumuşak için tick bazlı)
+  if(!game._incomeAcc) game._incomeAcc=0;
+  game._incomeAcc += TICK_MS;
+  if(game._incomeAcc>=1000){
+    game._incomeAcc=0;
+    // binaların gelirini sahiplerine yaz
+    const byOwner={};
+    Object.values(game.buildings).forEach(b=>{
+      const def=BUILDINGS.find(x=>x.code===b.code);
+      if(def.income){
+        byOwner[b.owner]=byOwner[b.owner]||{food:0,iron:0,gold:0,oil:0,power:0};
+        for(const k of RES) byOwner[b.owner][k]+= (def.income[k]||0)/60; // /dk -> /sn
+      }
+    });
+    // yuvarla-yaz
+    for(const uid of Object.keys(byOwner)){
+      const r = (game.resources[uid]||{});
+      for(const k of RES){ r[k]=(r[k]||0)+byOwner[uid][k]; }
+      // küçük ondalıkları bastır
+      for(const k of RES){ r[k]=Math.max(0, Math.round(r[k]*10)/10); }
+      playersRef.child(uid).child('res').set(r);
+    }
+  }
+  // hareket/saldırı simülasyonu
+  simStep();
 }
 function tryPayServer(uid, cost){
   const r = game.resources[uid]; if(!r) return false;
@@ -361,554 +474,493 @@ function tryPayServer(uid, cost){
   playersRef.child(uid).child('res').set(nr);
   return true;
 }
-async function hostLoop(){
-  await metaRef.child('hostHeartbeat').set(now());
-
-  const snap = await cmdRef.get();
-  const cmds=[];
-  snap.forEach(u=>u.forEach(c=>cmds.push({...c.val(), _path:c.ref})));
-
-  for(const c of cmds){
-    if(c.type==='build'){
-      const {uid, code, x,y}=c;
-      const def = BUILDINGS.find(b=>b.code===code);
-      if(!canPlace(code,x,y) || !tryPayServer(uid, def.cost)){ await c._path.remove(); continue; }
-      spawnBuilding(uid, code, x,y);
-    }
-    if(c.type==='train'){
-      const {uid, code, nearX, nearY}=c;
-      const def=UNIT_BY_CODE[code];
-      if(!tryPayServer(uid, def.cost)){ await c._path.remove(); continue; }
-      const pos = findFreeAround(nearX,nearY);
-      if(pos) spawnUnit(uid, code, pos.x, pos.y);
-    }
-    if(c.type==='order'){
-      const {uid, unitId, order}=c;
-      const u = game.units[unitId];
-      if(u && u.owner===uid) unitsRef.child(unitId).child('order').set(order||null);
-    }
-    await c._path.remove();
+function findFreeAround(x,y){
+  const dirs=[[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]];
+  for(const [dx,dy] of dirs){
+    const nx=x+dx, ny=y+dy;
+    if(nx<0||ny<0||nx>=GRID||ny>=GRID) continue;
+    // duvar/yoğunluk kontrol
+    const block = Object.values(game.buildings).some(b=>b.x===nx && b.y===ny && (BUILDINGS.find(bb=>bb.code===b.code).blocks));
+    const occ = Object.values(game.units).some(u=>u.x===nx && u.y===ny);
+    const terr = game.map[ny][nx];
+    if(!block && !occ && terr.t!=='water') return {x:nx,y:ny};
   }
-
-  // Gelir (her saniye)
-  game._incomeAcc += TICK_MS;
-  if(game._incomeAcc>=1000){
-    game._incomeAcc=0;
-    const byOwner={};
-    Object.values(game.buildings).forEach(b=>{
-      const def=BUILDINGS.find(x=>x.code===b.code);
-      if(def.income){
-        byOwner[b.owner]=byOwner[b.owner]||{food:0,iron:0,gold:0,oil:0,power:0};
-        for(const k of RES) byOwner[b.owner][k]+= (def.income[k]||0)/60;
-      }
-    });
-    for(const uid of Object.keys(byOwner)){
-      const r=(game.resources[uid]||{});
-      for(const k of RES){ r[k]=(r[k]||0)+byOwner[uid][k]; }
-      for(const k of RES){ r[k]=Math.max(0, Math.round(r[k]*10)/10); }
-      playersRef.child(uid).child('res').set(r);
-    }
-  }
-
-  simStep();
+  return null;
 }
 
 /* =======================
-   Yol Bulma & Savaş
+   Simülasyon
 ======================= */
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function inRange(u, v){
+  const du = UNIT_BY_CODE[u.code];
+  const rng = du.rng;
+  return Math.abs(u.x - v.x) <= rng && Math.abs(u.y - v.y) <= rng && (Math.hypot(u.x-v.x,u.y-v.y) <= rng+0.01);
+}
 function passable(x,y, cat){
   if(x<0||y<0||x>=GRID||y>=GRID) return false;
   const cell = game.map[y][x];
-  if(cat==='air') return true;
+  if(cat==='air') return true; // hava her yerden
   if(cell.t==='water' && !cell.bridge) return false;
+  // duvar engeli
   const wallHere = Object.values(game.buildings).some(b=>b.x===x && b.y===y && BUILDINGS.find(bb=>bb.code===b.code).blocks);
   return !wallHere;
 }
+function stepMove(u){
+  if(!u.order || u.order.type!=='move') return;
+  const def = UNIT_BY_CODE[u.code];
+  if(!u._path || !u._path.length){
+    // A* ile路径
+    const path = astar({x:u.x,y:u.y}, {x:u.order.x,y:u.order.y}, def.cat);
+    u._path = path;
+  }
+  if(u._path && u._path.length){
+    const next = u._path[0];
+    if(u.x===next.x && u.y===next.y){ u._path.shift(); return; }
+    // 1 hücre/sn = 1; spd hücre/sn
+    const step = def.spd * (TICK_MS/1000);
+    // grid adım (tile tile)
+    const dx = Math.sign(next.x - u.x), dy = Math.sign(next.y - u.y);
+    // parçalı ilerleme: fraksiyon sakla
+    if(u.fx===undefined){ u.fx=u.x; u.fy=u.y; }
+    let vdx = dx*step, vdy = dy*step;
+    // hedefe aşırı gitme engeli
+    if(Math.abs((u.fx+vdx)-next.x) < step) u.fx=next.x; else u.fx += vdx;
+    if(Math.abs((u.fy+vdy)-next.y) < step) u.fy=next.y; else u.fy += vdy;
+    // hücre tamamlandı mı?
+    if(Math.abs(u.fx-next.x)<0.01 && Math.abs(u.fy-next.y)<0.01){
+      u.x = next.x; u.y = next.y; u.fx=u.x; u.fy=u.y; u._path.shift();
+    } else {
+      // ara konumu yaz
+      unitsRef.child(u.id).update({fx:u.fx, fy:u.fy});
+    }
+  }
+}
+function stepCombat(u){
+  const def = UNIT_BY_CODE[u.code];
+  if(!def) return;
+  // hedef bul veya mevcut hedefi doğrula
+  let t=null;
+  if(u.tgt){
+    const v = game.units[u.tgt];
+    if(v && v.owner!==u.owner) t=v;
+    else u.tgt=null;
+  }
+  if(!t){
+    // otomatik hedef seçimi: en yakın düşman uygun kategoride ve menzildeyse
+    let best=null, bd=1e9;
+    for(const v of Object.values(game.units)){
+      if(v.owner===u.owner) continue;
+      const dv = UNIT_BY_CODE[v.code];
+      // hedef kategorisi uygun mu?
+      const targetCat = dv.cat;
+      if(def.vs.length && !def.vs.includes(targetCat)) continue;
+      const d = Math.hypot((u.fx??u.x)-(v.fx??v.x), (u.fy??u.y)-(v.fy??v.y));
+      if(d < bd){ bd=d; best=v; }
+    }
+    if(best && dTiles(u,best) <= def.rng+0.05) t=best, u.tgt=best.id;
+  }
+  // saldır
+  if(t && dTiles(u,t) <= def.rng+0.05){
+    if(u.cd>0){ u.cd-=TICK_MS; if(u.cd<0) u.cd=0; return; }
+    // hasar/sn -> tick hasarı
+    const dmg = def.dps * (TICK_MS/1000);
+    const newHp = (t.hp || UNIT_BY_CODE[t.code].hp) - dmg;
+    // efekt: lazer
+    beamEffect(u, t);
+    if(newHp<=0){
+      unitsRef.child(t.id).remove();
+      u.tgt=null;
+    } else {
+      unitsRef.child(t.id).child('hp').set(Math.round(newHp));
+    }
+    u.cd = 800; // atış periyodu (ms)
+  }
+}
+function dTiles(a,b){ return Math.hypot((a.fx??a.x)-(b.fx??b.x), (a.fy??a.y)-(b.fy??b.y)); }
+
 function astar(start, goal, cat){
-  const open=[{...start}];
-  const g=new Map(), f=new Map(), came=new Map();
-  const key=p=>p.x+','+p.y;
-  const H=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y);
-  g.set(key(start),0); f.set(key(start),H(start,goal));
+  // 4-yön A*
+  const open=[{...start,g:0,f:0}];
+  const key=(p)=>p.x+','+p.y;
+  const came=new Map(), gscore=new Map([[key(start),0]]);
+  const fscore=new Map([[key(start),heur(start,goal)]]);
   const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  function heur(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
   while(open.length){
-    open.sort((a,b)=> (f.get(key(a))??1e9) - (f.get(key(b))??1e9));
+    open.sort((a,b)=> (fscore.get(key(a))??1e9)-(fscore.get(key(b))??1e9));
     const cur=open.shift();
     if(cur.x===goal.x && cur.y===goal.y){
-      const path=[]; let ck=key(cur), node=cur;
-      while(came.has(ck)){ path.unshift({x:node.x,y:node.y}); node=came.get(ck); ck=key(node); }
+      // yol oluştur
+      const path=[];
+      let ck=key(cur);
+      let node=cur;
+      while(came.has(ck)){
+        path.unshift({x:node.x,y:node.y});
+        node = came.get(ck); ck=key(node);
+      }
       return path;
     }
     for(const [dx,dy] of dirs){
       const nx=cur.x+dx, ny=cur.y+dy;
       if(!passable(nx,ny,cat)) continue;
-      const nk=nx+','+ny, ng=(g.get(key(cur))??1e9)+1;
-      if(ng < (g.get(nk)??1e9)){
-        came.set(nk,cur); g.set(nk,ng); f.set(nk, ng+H({x:nx,y:ny},goal));
+      const ng = (gscore.get(key(cur))??1e9)+1;
+      const nk = nx+','+ny;
+      if(ng < (gscore.get(nk)??1e9)){
+        came.set(nk, cur); gscore.set(nk,ng); fscore.set(nk, ng+heur({x:nx,y:ny},goal));
         if(!open.find(o=>o.x===nx&&o.y===ny)) open.push({x:nx,y:ny});
       }
     }
   }
   return [];
 }
-function dTiles(a,b){ return Math.hypot((a.fx??a.x)-(b.fx??b.x), (a.fy??a.y)-(b.fy??b.y)); }
-function beamEffect(u, v){
-  const a = toScreen((u.fx??u.x)+.5,(u.fy??u.y)+.5);
-  const b = toScreen((v.fx??v.x)+.5,(v.fy??v.y)+.5);
-  const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy), ang=Math.atan2(dy,dx);
-  const el=document.createElement('div');
-  el.className='beam';
-  el.style.left=a.x+'px'; el.style.top=a.y+'px';
-  el.style.width=len+'px'; el.style.transform=`rotate(${ang}rad)`;
-  overlay.appendChild(el); setTimeout(()=>el.remove(), 180);
-}
-function inRange(u, v){
-  const du = UNIT_BY_CODE[u.code]; const rng = du.rng;
-  return dTiles(u,v) <= rng + 0.05;
-}
-function stepMove(u){
-  if(!u.order || u.order.type!=='move') return;
-  const def=UNIT_BY_CODE[u.code];
-  if(!u._path || !u._path.length) u._path = astar({x:u.x,y:u.y},{x:u.order.x,y:u.order.y}, def.cat);
-  if(!u._path || !u._path.length) return;
-  const next = u._path[0];
-  const step = def.spd * (TICK_MS/1000);
-  if(u.fx===undefined){ u.fx=u.x; u.fy=u.y; }
-  const dx = Math.sign(next.x - u.x), dy = Math.sign(next.y - u.y);
-  let vdx=dx*step, vdy=dy*step;
-  if(Math.abs((u.fx+vdx)-next.x) < step) u.fx=next.x; else u.fx += vdx;
-  if(Math.abs((u.fy+vdy)-next.y) < step) u.fy=next.y; else u.fy += vdy;
-  if(Math.abs(u.fx-next.x)<0.01 && Math.abs(u.fy-next.y)<0.01){
-    u.x = next.x; u.y = next.y; u.fx=u.x; u.fy=u.y; u._path.shift();
-  } else {
-    unitsRef.child(u.id).update({fx:u.fx, fy:u.fy});
-  }
-}
-function stepCombat(u){
-  const def = UNIT_BY_CODE[u.code]; if(!def) return;
-  let t=null;
-  if(u.tgt){ const v=game.units[u.tgt]; if(v && v.owner!==u.owner) t=v; else u.tgt=null; }
-  if(!t){
-    let best=null, bd=1e9;
-    for(const v of Object.values(game.units)){
-      if(v.owner===u.owner) continue;
-      const dv = UNIT_BY_CODE[v.code]; const targetCat = dv.cat;
-      if(def.vs.length && !def.vs.includes(targetCat)) continue;
-      const d = dTiles(u,v); if(d<bd){ bd=d; best=v; }
-    }
-    if(best && inRange(u,best)) t=best, u.tgt=best.id;
-  }
-  if(t && inRange(u,t)){
-    if(u.cd>0){ u.cd-=TICK_MS; if(u.cd<0) u.cd=0; return; }
-    const dmg = def.dps * (TICK_MS/1000);
-    const newHp = (t.hp || UNIT_BY_CODE[t.code].hp) - dmg;
-    beamEffect(u,t);
-    if(newHp<=0){ unitsRef.child(t.id).remove(); u.tgt=null; }
-    else { unitsRef.child(t.id).child('hp').set(Math.round(newHp)); }
-    u.cd = 800;
-  }
-}
+
 function simStep(){
+  // units snapshot
   const units = Object.values(game.units);
   for(const u of units){
     stepMove(u);
     stepCombat(u);
+    // ölçekli konum güncellemeleri
     unitsRef.child(u.id).update({x:u.x,y:u.y, fx:u.fx??u.x, fy:u.fy??u.y, tgt:u.tgt??null, cd:u.cd});
   }
 }
 
 /* =======================
-   Çizim — Estetik Harita & Semboller
+   Çizim
 ======================= */
-let hoverCell=null, buildGhost=null;
-overlay.addEventListener('mousemove', e=>{
-  const p = screenToWorld(e);
-  hoverCell = {x:clamp(p.tx,0,GRID-1), y:clamp(p.ty,0,GRID-1)};
-  if(buildMode.code) buildGhost = {code:buildMode.code, x:hoverCell.x, y:hoverCell.y, ok: canPlace(buildMode.code, hoverCell.x, hoverCell.y)};
-  else buildGhost=null;
-  // tooltip
-  showTipForCell(hoverCell.x, hoverCell.y, e.clientX, e.clientY);
-});
-overlay.addEventListener('mouseleave', ()=>{ hoverCell=null; tooltip.classList.add('hidden'); });
-
-function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
-
 function draw(){
-  const W = canvas.width, H=canvas.height;
   ctx.save();
-  ctx.scale(DPR,DPR); // HiDPI
-  ctx.clearRect(0,0,W/DPR,H/DPR);
-
-  // Kamera çevirisi
+  ctx.clearRect(0,0,WIDTH,HEIGHT);
+  // kamera
   ctx.translate(-game.cam.x, -game.cam.y);
   ctx.scale(game.cam.zoom, game.cam.zoom);
 
-  // Zemin dokuları
+  // zemin
   for(let y=0;y<GRID;y++){
     for(let x=0;x<GRID;x++){
       const c = game.map[y][x];
-      const px=x*CELL, py=y*CELL;
-      // temel renk
-      let base=(c.t==='land')? 'var(--land)' : (c.t==='desert'?'var(--desert)':'var(--water)');
-      let alt =(c.t==='land')? 'var(--land2)': (c.t==='desert'?'var(--desert2)':'var(--water2)');
-      // checker doku
-      ctx.fillStyle = base; ctx.fillRect(px,py,CELL,CELL);
-      ctx.fillStyle = alt; ctx.globalAlpha=0.25;
-      ctx.fillRect(px,py,CELL*0.5,CELL*0.5);
-      ctx.fillRect(px+CELL*0.5,py+CELL*0.5,CELL*0.5,CELL*0.5);
-      ctx.globalAlpha=1;
-      // su dalga çizgileri
-      if(c.t==='water'){
-        ctx.strokeStyle='rgba(255,255,255,0.05)'; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.moveTo(px+6,py+CELL*0.7); ctx.quadraticCurveTo(px+CELL*0.4,py+CELL*0.6, px+CELL-6, py+CELL*0.75); ctx.stroke();
-      }
+      let col = (c.t==='land')? 'var(--land)' : (c.t==='desert' ? 'var(--desert)' : 'var(--water)');
+      ctx.fillStyle = col;
+      ctx.fillRect(x*CELL, y*CELL, CELL, CELL);
       // köprü
       if(c.bridge){
-        ctx.fillStyle='var(--bridge)';
-        ctx.fillRect(px, py+CELL*0.42, CELL, CELL*0.16);
-        ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.moveTo(px,py+CELL*0.42); ctx.lineTo(px+CELL,py+CELL*0.42); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(px,py+CELL*0.58); ctx.lineTo(px+CELL,py+CELL*0.58); ctx.stroke();
+        ctx.fillStyle = 'var(--bridge)';
+        ctx.fillRect(x*CELL, y*CELL + CELL*0.4, CELL, CELL*0.2);
       }
-      // kıyı vurgusu
-      if(c.t==='water'){
-        ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=2;
-        if(y>0 && game.map[y-1][x].t!=='water'){ ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px+CELL,py); ctx.stroke(); }
-        if(y<GRID-1 && game.map[y+1][x].t!=='water'){ ctx.beginPath(); ctx.moveTo(px,py+CELL); ctx.lineTo(px+CELL,py+CELL); ctx.stroke(); }
-        if(x>0 && game.map[y][x-1].t!=='water'){ ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px,py+CELL); ctx.stroke(); }
-        if(x<GRID-1 && game.map[y][x+1].t!=='water'){ ctx.beginPath(); ctx.moveTo(px+CELL,py); ctx.lineTo(px+CELL,py+CELL); ctx.stroke(); }
-      }
-      // grid çizgisi (hafif)
-      ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.strokeRect(px,py,CELL,CELL);
+      // grid
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.strokeRect(x*CELL, y*CELL, CELL, CELL);
     }
   }
 
-  // Binalar: ikonlu kutular
+  // binalar
   for(const b of Object.values(game.buildings)){
     const def = BUILDINGS.find(x=>x.code===b.code);
     const x=b.x*CELL, y=b.y*CELL;
-    // gölge
-    ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(x+4, y+6, CELL-8, CELL-10);
-    // ana blok
-    ctx.fillStyle='rgba(255,255,255,.08)'; ctx.fillRect(x+4, y+4, CELL-8, CELL-10);
-    // üst şerit
-    ctx.fillStyle=def.tint; ctx.globalAlpha=0.25; ctx.fillRect(x+4, y+4, CELL-8, 10); ctx.globalAlpha=1;
+    ctx.fillStyle = 'rgba(255,255,255,.08)';
+    ctx.fillRect(x+4,y+4, CELL-8, CELL-8);
     // ikon
-    ctx.font='600 16px Montserrat'; ctx.fillStyle='#e2e8f0';
-    ctx.fillText(def.icon, x+8, y+20);
-    ctx.font='700 11px Montserrat'; ctx.fillStyle='#cbd5e1';
-    ctx.fillText(def.code, x+28, y+20);
-    // HP bar
-    ctx.fillStyle='#0b1220'; ctx.fillRect(x+6, y+CELL-12, CELL-12, 7);
-    ctx.fillStyle='#10b981'; const pw = Math.max(0, (b.hp/def.hp)*(CELL-12)); ctx.fillRect(x+6, y+CELL-12, pw, 7);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '700 11px Inter';
+    ctx.fillText(def.code, x+6, y+16);
+    // HP barı
+    ctx.fillStyle='#1f2937'; ctx.fillRect(x+6, y+CELL-10, CELL-12, 6);
+    ctx.fillStyle='#10b981'; const pw = Math.max(0, (b.hp/def.hp)*(CELL-12));
+    ctx.fillRect(x+6, y+CELL-10, pw, 6);
   }
 
-  // Birimler: sembol + daire
+  // birimler
   for(const u of Object.values(game.units)){
     const def = UNIT_BY_CODE[u.code];
-    const cx = (u.fx??u.x)*CELL + CELL/2;
-    const cy = (u.fy??u.y)*CELL + CELL/2;
+    const ux = (u.fx??u.x)*CELL, uy = (u.fy??u.y)*CELL;
     // gölge
-    ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.arc(cx+2, cy+3, 9, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(ux+CELL/2, uy+CELL/2, 7, 0, Math.PI*2); ctx.fill();
     // gövde
-    ctx.fillStyle = (def.cat==='air')? '#c084fc' : '#7dd3fc';
-    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI*2); ctx.fill();
-    // ikon
-    ctx.font='700 12px Montserrat'; ctx.fillStyle='#0b1220'; ctx.fillText(def.icon, cx-7, cy+5);
-    // seçili menzil
-    if(game.mySelection===u.id){
-      ctx.save();
-      ctx.strokeStyle='rgba(96,165,250,0.55)'; ctx.setLineDash([6,6]); ctx.lineWidth=2;
-      ctx.beginPath(); ctx.arc(cx, cy, def.rng*CELL, 0, Math.PI*2); ctx.stroke();
-      ctx.restore();
+    ctx.fillStyle = UNIT_COLOR[def.cat] || '#93c5fd';
+    ctx.beginPath(); ctx.arc(ux+CELL/2, uy+CELL/2, 6, 0, Math.PI*2); ctx.fill();
+    // işaret: hava üçgen
+    if(def.cat==='air'){
+      ctx.strokeStyle='#e9d5ff'; ctx.beginPath(); ctx.moveTo(ux+CELL/2, uy+CELL/2-7); ctx.lineTo(ux+CELL/2-6, uy+CELL/2+6); ctx.lineTo(ux+CELL/2+6, uy+CELL/2+6); ctx.closePath(); ctx.stroke();
     }
-    // HP çubuğu
-    ctx.fillStyle='#0b1220'; ctx.fillRect(cx-14, cy+12, 28, 5);
-    ctx.fillStyle='#10b981'; ctx.fillRect(cx-14, cy+12, Math.max(0,28*(u.hp/def.hp)), 5);
-  }
-
-  // İnşa gölgesi
-  if(buildGhost){
-    const gx=buildGhost.x*CELL, gy=buildGhost.y*CELL;
-    ctx.fillStyle = buildGhost.ok ? 'rgba(34,197,94,.25)' : 'rgba(239,68,68,.25)';
-    ctx.fillRect(gx,gy,CELL,CELL);
-    ctx.strokeStyle = buildGhost.ok ? 'rgba(34,197,94,.8)' : 'rgba(239,68,68,.8)';
-    ctx.lineWidth=2; ctx.strokeRect(gx+2,gy+2,CELL-4,CELL-4);
+    // menzil halkası (seçili)
+    if(game.mySelection===u.id){
+      ctx.strokeStyle='rgba(96,165,250,0.5)';
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.arc(ux+CELL/2, uy+CELL/2, (UNIT_BY_CODE[u.code].rng*CELL), 0, Math.PI*2);
+      ctx.stroke();
+    }
+    // küçük kod etiketi
+    ctx.fillStyle='#0b1220'; ctx.font='700 9px Inter'; ctx.fillText(def.code, ux+CELL/2-11, uy+CELL/2+3);
+    // HP
+    ctx.fillStyle='#1f2937'; ctx.fillRect(ux+CELL/2-12, uy+CELL-6, 24,4);
+    ctx.fillStyle='#10b981'; ctx.fillRect(ux+CELL/2-12, uy+CELL-6, Math.max(0,24*(u.hp/def.hp)),4);
   }
 
   ctx.restore();
   drawMinimap();
   requestAnimationFrame(draw);
 }
-
 function drawMinimap(){
-  const s = mmin.width / GRID;
-  mctx.clearRect(0,0,mmin.width,mmin.height);
+  // arka
+  mctx.clearRect(0,0,200,200);
+  const s = 200/GRID;
   for(let y=0;y<GRID;y++){
     for(let x=0;x<GRID;x++){
-      const c=game.map[y][x];
-      mctx.fillStyle = (c.t==='land')? '#1e6143' : (c.t==='desert'?'#a08f4c':'#193a5c');
+      const c = game.map[y][x];
+      mctx.fillStyle = (c.t==='land')? '#1f6845' : (c.t==='desert' ? '#a69244' : '#1a4062');
       mctx.fillRect(x*s,y*s,s,s);
-      if(c.bridge){ mctx.fillStyle='#9aa6b2'; mctx.fillRect(x*s,y*s+s*0.45,s,s*0.1); }
+      if(c.bridge){ mctx.fillStyle='#7a8796'; mctx.fillRect(x*s,y*s+s*0.45,s,s*0.1); }
     }
   }
+  // birimler
   for(const u of Object.values(game.units)){
+    const def=UNIT_BY_CODE[u.code];
     mctx.fillStyle = (u.owner===me.uid)? '#60a5fa' : '#f472b6';
-    mctx.fillRect(u.x*s+1, u.y*s+1, s-2, s-2);
+    mctx.fillRect((u.x)*s+2,(u.y)*s+2, s-4, s-4);
   }
-  // kamera
-  const sx = (game.cam.x/WORLD_W)*mmin.width;
-  const sy = (game.cam.y/WORLD_H)*mmin.height;
-  const sw = (widthOnScreen()/WORLD_W)*mmin.width;
-  const sh = (heightOnScreen()/WORLD_H)*mmin.height;
+  // kamera kutusu
+  const sx = (game.cam.x/WIDTH)*200, sy=(game.cam.y/HEIGHT)*200;
+  const sw = (widthOnScreen()/WIDTH)*200, sh=(heightOnScreen()/HEIGHT)*200;
   mctx.strokeStyle='#e2e8f0'; mctx.strokeRect(sx,sy,sw,sh);
 }
 
 /* =======================
-   Ekran ↔︎ Dünya Dönüşümü & Kamera
+   UI — Build & Train
 ======================= */
-let isPanning=false, panStart=null;
-overlay.addEventListener('mousedown', e=>{
-  if(e.button===1){ isPanning=true; panStart={x:e.clientX,y:e.clientY, cx:game.cam.x, cy:game.cam.y}; }
-});
-overlay.addEventListener('mousemove', e=>{
-  if(isPanning){
-    const dx=e.clientX-panStart.x, dy=e.clientY-panStart.y;
-    game.cam.x = clamp(panStart.cx - dx/game.cam.zoom, 0, WORLD_W - widthOnScreen());
-    game.cam.y = clamp(panStart.cy - dy/game.cam.zoom, 0, WORLD_H - heightOnScreen());
+function resStr(cost){
+  return `🍞${cost.food||0} ⛏️${cost.iron||0} 🪙${cost.gold||0} 🛢️${cost.oil||0} ⚡${cost.power||0}`;
+}
+function renderBuildPanel(){
+  const list = $('#buildList'); list.innerHTML='';
+  for(const b of BUILDINGS){
+    if(b.code==='HQ') continue; // HQ otomatik kurulur
+    const btn = document.createElement('button');
+    btn.className='btn-ghost rounded p-2 text-left hover:ring-2 ring-sky-500';
+    btn.innerHTML = `<div class="font-semibold">${b.name}</div>
+    <div class="flex justify-between text-xs opacity-80"><span>${b.code}</span><span>${resStr(b.cost)}</span></div>`;
+    btn.onclick = ()=>{
+      buildMode.code = b.code;
+      toast(`${b.name} seçildi. Haritada sağ tıkla ve hücreyi onayla.`);
+    };
+    list.appendChild(btn);
   }
-});
-overlay.addEventListener('mouseup', ()=>{ isPanning=false; });
-overlay.addEventListener('mouseleave', ()=>{ isPanning=false; });
-overlay.addEventListener('wheel', e=>{
-  const before = screenToWorld(e);
-  const z = game.cam.zoom * (e.deltaY>0 ? 0.9 : 1.1);
-  game.cam.zoom = Math.max(.6, Math.min(2.4, z));
-  const after = screenToWorld(e);
-  // zoom pivot düzeltmesi
-  game.cam.x += (before.wx - after.wx);
-  game.cam.y += (before.wy - after.wy);
-  e.preventDefault();
-},{passive:false});
-
-overlay.addEventListener('contextmenu', e=>e.preventDefault());
-
-function widthOnScreen(){ return (canvas.width/DPR) / game.cam.zoom; }
-function heightOnScreen(){ return (canvas.height/DPR) / game.cam.zoom; }
-
-function screenToWorld(e){
-  const rect = canvas.getBoundingClientRect();
-  const sx = e.clientX - rect.left;
-  const sy = e.clientY - rect.top;
-  const wx = (sx / (canvas.width/DPR)) * widthOnScreen() + game.cam.x;
-  const wy = (sy / (canvas.height/DPR)) * heightOnScreen() + game.cam.y;
-  return {wx, wy, tx:Math.floor(wx/CELL), ty:Math.floor(wy/CELL)};
 }
-function toScreen(cx,cy){
-  const x = (cx*CELL - game.cam.x) * game.cam.zoom;
-  const y = (cy*CELL - game.cam.y) * game.cam.zoom;
-  return {x, y};
+function renderUnitPanel(){
+  const list = $('#unitList'); list.innerHTML='';
+  for(const u of UNITS){
+    const btn = document.createElement('button');
+    btn.className='btn-ghost rounded p-2 text-left hover:ring-2 ring-sky-500';
+    btn.innerHTML = `<div class="font-semibold">${u.name}</div>
+    <div class="flex justify-between"><span class="opacity-80">${u.code} • ${u.cat==='air'?'Hava':'Kara'}</span><span class="text-xs">${resStr(u.cost)}</span></div>
+    <div class="text-xs opacity-80">HP:${u.hp} RNG:${u.rng} SPD:${u.spd} DPS:${u.dps}</div>`;
+    btn.onclick = ()=>{ trainMode.code=u.code; toast(`${u.name} için üretim: üretim binasının yanına çıkacak. Sağ tıkla.`); };
+    list.appendChild(btn);
+  }
 }
-
-/* =======================
-   Seçim & Komut & Tooltip
-======================= */
 const buildMode = {code:null};
 const trainMode = {code:null};
+
+/* =======================
+   Girdi: seçim/komut
+======================= */
+function screenToWorld(e){
+  const rect = canvas.getBoundingClientRect();
+  const sx = (e.clientX - rect.left), sy=(e.clientY - rect.top);
+  const wx = (sx / game.cam.zoom) + game.cam.x;
+  const wy = (sy / game.cam.zoom) + game.cam.y;
+  return {wx,wy, tx:Math.floor(wx/CELL), ty:Math.floor(wy/CELL)};
+}
 
 overlay.addEventListener('mousedown', async (e)=>{
   const p = screenToWorld(e);
   if(e.button===0){
-    // SOL: seçim
+    // sol: seçim
     let sel=null;
     for(const u of Object.values(game.units)){
-      if(u.owner!==me.uid) continue;
-      const cx=(u.fx??u.x)*CELL + CELL/2, cy=(u.fy??u.y)*CELL + CELL/2;
-      const sx=(p.wx - (u.fx??u.x)*CELL - CELL/2), sy=(p.wy - (u.fy??u.y)*CELL - CELL/2);
-      if(Math.hypot(sx,sy)<12){ sel=u.id; break; }
+      const ux=(u.fx??u.x)*CELL+CELL/2, uy=(u.fy??u.y)*CELL+CELL/2;
+      const d=Math.hypot(p.wx-ux,p.wy-uy);
+      if(d<10 && u.owner===me.uid){ sel=u.id; break; }
     }
     game.mySelection = sel;
   }
   if(e.button===2){
-    // SAĞ: komut
+    // sağ: komut
     const tx=p.tx, ty=p.ty;
     if(buildMode.code){
+      // inşa komutu
       await pushCommand({type:'build', uid:me.uid, code:buildMode.code, x:tx, y:ty});
-      buildMode.code=null; $('#buildPanel').classList.add('hidden'); return;
+      buildMode.code=null;
+      $('#buildPanel').classList.add('hidden');
+      return;
     }
     if(trainMode.code){
       await pushCommand({type:'train', uid:me.uid, code:trainMode.code, nearX:tx, nearY:ty});
-      trainMode.code=null; $('#trainPanel').classList.add('hidden'); return;
+      trainMode.code=null;
+      $('#trainPanel').classList.add('hidden');
+      return;
     }
+    // hedefte düşman var mı?
+    let targetUnit = Object.values(game.units).find(u=>u.x===tx && u.y===ty && u.owner!==me.uid);
     if(game.mySelection){
-      // hedef hücrede düşman var mı?
-      const target = Object.values(game.units).find(u=>u.x===tx && u.y===ty && u.owner!==me.uid);
-      const order = target ? {type:'attack', id:target.id} : {type:'move', x:tx, y:ty};
+      const order = targetUnit ? {type:'attack', id:targetUnit.id} : {type:'move', x:tx, y:ty};
       await pushCommand({type:'order', uid:me.uid, unitId:game.mySelection, order});
     }
   }
 });
 
-function showTipForCell(x,y, clientX, clientY){
-  const bHere = Object.values(game.buildings).filter(b=>b.x===x && b.y===y);
-  const uHere = Object.values(game.units).filter(u=>Math.round(u.x)===x && Math.round(u.y)===y);
-  if(bHere.length===0 && uHere.length===0){ tooltip.classList.add('hidden'); return; }
-  let html='';
-  for(const b of bHere){
-    const def=BUILDINGS.find(bb=>bb.code===b.code);
-    const owner = game.players[b.owner]?.name || '??';
-    html += `<div><b>${def.icon} ${def.name}</b> <span class="opacity-70">(${def.code})</span> — ${Math.round(b.hp)}/${def.hp} HP</div>`;
-    html += `<div class="opacity-70 text-[11px]">Sahip: ${owner}</div>`;
-  }
-  for(const u of uHere){
-    const def=UNIT_BY_CODE[u.code];
-    const owner = game.players[u.owner]?.name || '??';
-    html += `<div><b>${def.icon} ${def.name}</b> <span class="opacity-70">(${def.code})</span> — ${Math.round(u.hp)}/${def.hp} HP</div>`;
-    html += `<div class="opacity-70 text-[11px]">Sahip: ${owner}</div>`;
-  }
-  tooltip.innerHTML = html;
-  tooltip.style.left = (clientX+14)+'px';
-  tooltip.style.top  = (clientY+14)+'px';
-  tooltip.classList.remove('hidden');
-}
-
 /* =======================
-   UI Panelleri
+   Efektler
 ======================= */
-function renderBuildPanel(){
-  const list=$('#buildList'); list.innerHTML='';
-  for(const b of BUILDINGS){
-    if(b.code==='HQ') continue;
-    const item=document.createElement('button');
-    item.className='btn-ghost rounded p-2 text-left hover:ring-2 ring-sky-500';
-    item.innerHTML = `<div class="font-semibold">${b.icon} ${b.name}</div>
-      <div class="flex justify-between text-xs opacity-80"><span>${b.code}</span><span>${resStr(b.cost)}</span></div>`;
-    item.onmouseenter=()=>toast(`${b.name}: ${resStr(b.cost)}`);
-    item.onclick=()=>{ buildMode.code=b.code; toast(`${b.name} seçildi. Haritada sağ tıkla.`); };
-    list.appendChild(item);
-  }
+function beamEffect(u, v){
+  // turuncu lazer
+  const a = toScreen((u.fx??u.x)+.5,(u.fy??u.y)+.5);
+  const b = toScreen((v.fx??v.x)+.5,(v.fy??v.y)+.5);
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const len=Math.hypot(dx,dy);
+  const ang=Math.atan2(dy,dx);
+  const el=document.createElement('div');
+  el.className='beam';
+  el.style.left=a.x+'px';
+  el.style.top=a.y+'px';
+  el.style.width=len+'px';
+  el.style.transform=`rotate(${ang}rad)`;
+  overlay.appendChild(el);
+  setTimeout(()=> el.remove(), 180);
 }
-function renderUnitPanel(){
-  const list=$('#unitList'); list.innerHTML='';
-  for(const u of UNITS){
-    const item=document.createElement('button');
-    item.className='btn-ghost rounded p-2 text-left hover:ring-2 ring-sky-500';
-    item.innerHTML = `<div class="font-semibold">${u.icon} ${u.name}</div>
-      <div class="flex justify-between"><span class="opacity-80">${u.code} • ${u.cat==='air'?'Hava':'Kara'}</span><span class="text-xs">${resStr(u.cost)}</span></div>
-      <div class="text-xs opacity-80">HP:${u.hp} RNG:${u.rng} SPD:${u.spd} DPS:${u.dps}</div>`;
-    item.onclick=()=>{ trainMode.code=u.code; toast(`${u.name} üretimi aktif. Sağ tıkla yer seç.`); };
-    list.appendChild(item);
-  }
-}
-$('#openBuild').onclick=()=>{ renderBuildPanel(); $('#buildPanel').classList.toggle('hidden'); $('#trainPanel').classList.add('hidden'); };
-$('#openTrain').onclick=()=>{ renderUnitPanel(); $('#trainPanel').classList.toggle('hidden'); $('#buildPanel').classList.add('hidden'); };
-$('#centerBase').onclick=()=>{ const myHQ=Object.values(game.buildings).find(b=>b.owner===me.uid && b.code==='HQ'); if(myHQ) centerOn(myHQ.x,myHQ.y); };
-document.addEventListener('keydown', e=>{ if(e.key==='b'||e.key==='B') $('#openBuild').click(); if(e.key==='u'||e.key==='U') $('#openTrain').click(); });
-
-function centerOn(x,y){
-  const cx = x*CELL - (widthOnScreen()/2) + CELL/2;
-  const cy = y*CELL - (heightOnScreen()/2) + CELL/2;
-  game.cam.x = clamp(cx, 0, WORLD_W - widthOnScreen());
-  game.cam.y = clamp(cy, 0, WORLD_H - heightOnScreen());
+function toScreen(cx,cy){
+  return { x: (cx*CELL - game.cam.x)*game.cam.zoom, y: (cy*CELL - game.cam.y)*game.cam.zoom };
 }
 
 /* =======================
-   Odaya Katılım
+   HUD
+======================= */
+function updateHUD(){
+  const r = game.resources[me.uid]||{food:0,iron:0,gold:0,oil:0,power:0};
+  $('#resFood').innerText = Math.floor(r.food);
+  $('#resIron').innerText = Math.floor(r.iron);
+  $('#resGold').innerText = Math.floor(r.gold);
+  $('#resOil').innerText  = Math.floor(r.oil);
+  $('#resPower').innerText= Math.floor(r.power);
+}
+
+/* =======================
+   Host seçimi & dinleyiciler
 ======================= */
 async function joinRoom(roomId){
-  me.roomId=roomId; roomRefs(roomId);
+  me.roomId = roomId;
+  roomRefs(roomId);
 
-  // Harita yaz/oku
-  const ms = await mapRef.get();
-  if(!ms.exists()){ await mapRef.set(genMap(roomId)); }
+  // Map init (ilk kuran)
+  const mapSnap = await mapRef.get();
+  if(!mapSnap.exists()){
+    const mp = genMap(roomId);
+    await mapRef.set(mp);
+  }
   game.map = (await mapRef.get()).val();
 
-  // Oyuncu kaydı
-  const pInfo = {name:me.name, flag:me.flag, joinedAt:firebase.database.ServerValue.TIMESTAMP, res:{food:300,iron:220,gold:220,oil:130,power:70}};
+  // oyuncu kaydı
+  const pInfo = {name:me.name, flag:me.flag, joinedAt:firebase.database.ServerValue.TIMESTAMP, res:{food:300,iron:200,gold:200,oil:120,power:60}};
   await playersRef.child(me.uid).set(pInfo);
+  // ayrılırken sil
   playersRef.child(me.uid).onDisconnect().remove();
 
-  // Host ataması
-  await metaRef.child('hostUid').transaction(cur=>cur||me.uid);
+  // host ataması
+  await metaRef.child('hostUid').transaction(cur => cur || me.uid);
+  // listener: host değişimi / heartbeat
   metaRef.on('value', s=>{
-    const v=s.val()||{}; me.isHost = (v.hostUid===me.uid); game.hostHeartbeat=v.hostHeartbeat||0;
+    const v=s.val()||{}; game.hostHeartbeat = v.hostHeartbeat||0; me.isHost = (v.hostUid===me.uid);
     $('#hostBadge').classList.toggle('hidden', !me.isHost);
   });
+  // host watchdog: 5s kalp yoksa host olmayı dene
   setInterval(async ()=>{
     if(me.isHost) return;
     const v=(await metaRef.get()).val()||{};
     if(now() - (v.hostHeartbeat||0) > 5000){
-      await metaRef.child('hostUid').transaction(cur=>cur||me.uid);
+      await metaRef.child('hostUid').transaction(cur => cur || me.uid);
     }
   }, 3000);
 
   // Dinleyiciler
-  mapRef.on('value', s=> game.map = s.val()||game.map);
-  buildingsRef.on('value', s=> game.buildings = s.val()||{});
-  unitsRef.on('value', s=> game.units = s.val()||{});
+  mapRef.on('value', s=> { game.map = s.val()||game.map; });
+  buildingsRef.on('value', s=> { game.buildings = s.val()||{}; });
+  unitsRef.on('value', s=> { game.units = s.val()||{}; });
   playersRef.on('value', s=>{
     const v=s.val()||{};
-    game.players=v;
+    game.players = v;
     game.resources = Object.fromEntries(Object.entries(v).map(([k,o])=>[k,o.res||{food:0,iron:0,gold:0,oil:0,power:0}]));
     updateHUD();
   });
 
-  // Başlangıç üssü (yoksa komutla kurdur)
-  setTimeout(async ()=>{
-    const haveMyHQ = Object.values(game.buildings).some(b=>b.owner===me.uid && b.code==='HQ');
-    if(!haveMyHQ){
-      const order = Object.keys(game.players).sort();
-      const idx = order.indexOf(me.uid);
-      const baseX = (idx%2===0) ? 2 : GRID-3;
-      const baseY = 2 + (idx*3 % (GRID-4));
-      await pushCommand({type:'build', uid:me.uid, code:'HQ', x:baseX, y:baseY});
-      setTimeout(async ()=>{
-        await pushCommand({type:'train', uid:me.uid, code:'INF', nearX:baseX, nearY:baseY});
-        await pushCommand({type:'train', uid:me.uid, code:'IFV', nearX:baseX, nearY:baseY});
-      }, 300);
-      centerOn(baseX, baseY);
-    }
-  }, 400);
+  // kendi başlangıç üssü (yoksa)
+  const haveMyHQ = Object.values(game.buildings).some(b=>b.owner===me.uid && b.code==='HQ');
+  if(!haveMyHQ){
+    const myIndex = Object.keys(game.players).sort().indexOf(me.uid);
+    const baseX = (myIndex%2===0) ? 2 : GRID-3;
+    const baseY = 2 + (myIndex*3 % (GRID-4));
+    await pushCommand({type:'build', uid:me.uid, code:'HQ', x:baseX, y:baseY});
+    // başlangıç savunma ve birim
+    setTimeout(async ()=>{
+      await pushCommand({type:'train', uid:me.uid, code:'INF', nearX:baseX, nearY:baseY});
+      await pushCommand({type:'train', uid:me.uid, code:'IFV', nearX:baseX, nearY:baseY});
+    }, 300);
+    centerOn(baseX,baseY);
+  }
 
-  // Çizim & Host döngüsü
-  fitInitialZoom();
+  // çizime başla
   requestAnimationFrame(draw);
+
+  // host döngüsü
   setInterval(()=>{ if(me.isHost) hostLoop(); }, TICK_MS);
 
+  // HUD
   $('#roomLabel').innerText = 'Oda: '+roomId;
   toast('Odaya bağlandı: '+roomId);
 }
-function updateHUD(){
-  const r=game.resources[me.uid]||{food:0,iron:0,gold:0,oil:0,power:0};
-  $('#resFood').innerText=Math.floor(r.food);
-  $('#resIron').innerText=Math.floor(r.iron);
-  $('#resGold').innerText=Math.floor(r.gold);
-  $('#resOil').innerText=Math.floor(r.oil);
-  $('#resPower').innerText=Math.floor(r.power);
-}
 
-function fitInitialZoom(){
-  // Harita ekranı büyük kaplasın: tüm genişliği yaklaştır, biraz kenar bırak
-  const vw = canvas.width/DPR, vh=canvas.height/DPR;
-  const zX = vw / (WORLD_W*0.9);
-  const zY = vh / (WORLD_H*0.9);
-  game.cam.zoom = Math.max(.9, Math.min(1.8, Math.min(zX,zY)));
-  game.cam.x = (WORLD_W - widthOnScreen())/2;
-  game.cam.y = (WORLD_H - heightOnScreen())/2;
+function centerOn(x,y){
+  const cx = x*CELL - (widthOnScreen()/2) + CELL/2;
+  const cy = y*CELL - (heightOnScreen()/2) + CELL/2;
+  game.cam.x = Math.max(0, Math.min(WIDTH - widthOnScreen(), cx));
+  game.cam.y = Math.max(0, Math.min(HEIGHT - heightOnScreen(), cy));
 }
 
 /* =======================
-   Modal
+   UI wiring
 ======================= */
-function countryFlagValue(sel){ return sel.split(' ')[0]; }
+$('#openBuild').onclick = ()=>{ renderBuildPanel(); $('#buildPanel').classList.toggle('hidden'); $('#trainPanel').classList.add('hidden'); };
+$('#openTrain').onclick = ()=>{ renderUnitPanel(); $('#trainPanel').classList.toggle('hidden'); $('#buildPanel').classList.add('hidden'); };
+$('#centerBase').onclick = ()=>{
+  // kendi HQ konumuna ortala
+  const myHQ = Object.values(game.buildings).find(b=>b.owner===me.uid && b.code==='HQ');
+  if(myHQ) centerOn(myHQ.x, myHQ.y);
+};
+document.addEventListener('keydown', e=>{
+  if(e.key==='b' || e.key==='B') $('#openBuild').click();
+  if(e.key==='u' || e.key==='U') $('#openTrain').click();
+});
+
+/* =======================
+   Modal (Oda oluştur/katıl)
+======================= */
+function countryFlagValue(selText){
+  // "🇹🇷 Türkiye" -> "🇹🇷"
+  return selText.split(' ')[0];
+}
 $('#btnCreate').onclick = async ()=>{
   const name = $('#playerName').value.trim() || 'Komutan';
   const flag = countryFlagValue($('#playerFlag').value || '🇹🇷 Türkiye');
-  let rid = $('#roomIdInput').value.trim(); if(!rid) rid = ('DESERT-'+randId());
+  let rid = $('#roomIdInput').value.trim();
+  if(!rid) rid = ('DESERT-' + randId());
   me.name=name; me.flag=flag;
   $('#modal').classList.add('hidden');
-  try{ await signInAnon(); await joinRoom(rid); }
-  catch(e){ $('#modal').classList.remove('hidden'); toast('Oluşturma hatası: '+e.message,'error'); }
+  try{
+    await signInAnon();
+    await joinRoom(rid);
+  }catch(e){
+    $('#modal').classList.remove('hidden'); toast('Oluşturma hatası: '+e.message,'error');
+  }
 };
 $('#btnJoin').onclick = async ()=>{
   const name = $('#playerName').value.trim() || 'Komutan';
@@ -917,20 +969,25 @@ $('#btnJoin').onclick = async ()=>{
   if(!rid){ toast('Lütfen Oda ID girin','error'); return; }
   me.name=name; me.flag=flag;
   $('#modal').classList.add('hidden');
-  try{ await signInAnon(); await joinRoom(rid); }
-  catch(e){ $('#modal').classList.remove('hidden'); toast('Katılma hatası: '+e.message,'error'); }
+  try{
+    await signInAnon();
+    await joinRoom(rid);
+  }catch(e){
+    $('#modal').classList.remove('hidden'); toast('Katılım hatası: '+e.message,'error');
+  }
 };
 
 /* =======================
-   Başlat
+   Başlangıç çizimi (map boşken)
 ======================= */
 (function boot(){
-  // geçici yerel harita (modal açıkken çiz)
+  // boş geçici harita (modal altında)
   game.map = genMap('LOCAL');
-  fitInitialZoom();
-  requestAnimationFrame(draw);
-  $('#status').innerHTML = `<div>Sol tık: seçim • Sağ tık: hareket/saldırı • Orta tık+sürükle: kaydır • Teker: zoom</div>`;
+  draw();
+  // sağ alt bilgi
+  $('#status').innerHTML = `<div>Sol tık: seçim • Sağ tık: hareket/saldırı • Orta tık + sürükle: kaydır • Fare tekeri: zoom</div>`;
 })();
+
 </script>
 </body>
 </html>
